@@ -1,0 +1,573 @@
+import { useState, useRef, useEffect } from 'react'
+import { useAuth } from '../context/AuthContext'
+
+// ── Google icon SVG (reusable) ──────────────────────
+function GoogleIcon({ className = 'w-4 h-4' }) {
+    return (
+        <svg className={className} viewBox="0 0 24 24" fill="none">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+        </svg>
+    )
+}
+
+// ── Loading skeleton lines ──────────────────────────
+function LoadingState() {
+    return (
+        <div className="mt-10 scroll-reveal revealed">
+            <div className="rounded-2xl border border-accent/15 bg-gradient-to-br from-accent/[0.04] via-transparent to-transparent p-8 sm:p-10">
+                {/* Header shimmer */}
+                <div className="flex items-center gap-3 mb-8">
+                    <div className="w-3 h-3 rounded-full bg-accent/60 animate-pulse" />
+                    <span className="font-clash font-semibold text-lg text-accent/80">
+                        Crafting your skill…
+                    </span>
+                </div>
+
+                {/* Skeleton lines */}
+                <div className="space-y-3">
+                    {[100, 85, 92, 60, 88, 75, 95, 50, 80, 70].map((width, i) => (
+                        <div
+                            key={i}
+                            className="skeleton-line"
+                            style={{
+                                width: `${width}%`,
+                                animationDelay: `${i * 0.12}s`,
+                            }}
+                        />
+                    ))}
+                </div>
+
+                {/* Status text */}
+                <div className="mt-8 flex items-center gap-2">
+                    <svg className="w-4 h-4 text-accent/50 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    <span className="font-satoshi text-sm text-white/30">
+                        AI is analyzing your description and generating a structured skill file…
+                    </span>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+// ── Sign-in modal ───────────────────────────────────
+function SignInModal({ onClose, onSignIn }) {
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div
+                className="modal-card"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <button
+                    onClick={onClose}
+                    className="absolute top-4 right-4 text-white/30 hover:text-white/60 transition-colors"
+                >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+
+                <div className="text-center">
+                    <div className="w-14 h-14 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center mx-auto mb-5">
+                        <svg className="w-7 h-7 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                        </svg>
+                    </div>
+                    <h3 className="font-clash font-bold text-2xl mb-2">Sign in to continue</h3>
+                    <p className="font-satoshi text-sm text-white/40 mb-8">
+                        You need to be signed in to generate AI skills.
+                    </p>
+                    <button
+                        onClick={onSignIn}
+                        className="w-full flex items-center justify-center gap-3 px-6 py-3.5 rounded-xl bg-white/5 border border-white/10 hover:border-accent/30 hover:bg-white/10 transition-all duration-300 group"
+                    >
+                        <GoogleIcon />
+                        <span className="font-satoshi text-sm font-medium text-white/80 group-hover:text-white transition-colors">
+                            Sign in with Google
+                        </span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+// ── Save visibility modal ───────────────────────────
+function SaveModal({ onClose, onSave }) {
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div
+                className="modal-card"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <button
+                    onClick={onClose}
+                    className="absolute top-4 right-4 text-white/30 hover:text-white/60 transition-colors"
+                >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+
+                <div className="text-center">
+                    <h3 className="font-clash font-bold text-2xl mb-2">Who can see this skill?</h3>
+                    <p className="font-satoshi text-sm text-white/40 mb-8">
+                        Choose how you'd like to share your new skill.
+                    </p>
+
+                    <div className="space-y-3">
+                        <button
+                            onClick={() => onSave('private')}
+                            className="w-full flex items-center gap-4 px-5 py-4 rounded-xl border border-white/10 hover:border-accent/30 bg-white/[0.02] hover:bg-white/[0.05] transition-all duration-300 group text-left"
+                        >
+                            <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0 group-hover:border-accent/20 transition-colors">
+                                <svg className="w-5 h-5 text-white/50 group-hover:text-accent transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <p className="font-clash font-semibold text-white group-hover:text-accent-light transition-colors">Private</p>
+                                <p className="font-satoshi text-xs text-white/30">Only you can see this skill</p>
+                            </div>
+                        </button>
+
+                        <button
+                            onClick={() => onSave('public')}
+                            className="w-full flex items-center gap-4 px-5 py-4 rounded-xl border border-white/10 hover:border-accent/30 bg-white/[0.02] hover:bg-white/[0.05] transition-all duration-300 group text-left"
+                        >
+                            <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0 group-hover:border-accent/20 transition-colors">
+                                <svg className="w-5 h-5 text-white/50 group-hover:text-accent transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12.75 3.03v.568c0 .334.148.65.405.864l1.068.89c.442.369.535 1.01.216 1.49l-.51.766a2.25 2.25 0 01-1.161.886l-.143.048a1.107 1.107 0 00-.57 1.664c.369.555.169 1.307-.427 1.605L9 13.125l.423 1.059a.956.956 0 01-1.652.928l-.679-.906a1.125 1.125 0 00-1.906.172L4.5 15.75l-.612.153M12.75 3.031a9 9 0 00-8.862 12.872M12.75 3.031a9 9 0 016.69 14.036m0 0l-.177-.529A2.25 2.25 0 0017.128 15H16.5l-.324-.324a1.453 1.453 0 00-2.328.377l-.036.073a1.586 1.586 0 01-.982.816l-.99.282c-.55.157-.894.702-.8 1.267l.073.438a2.253 2.253 0 01-1.699 2.652l-.829.207a8.96 8.96 0 01-3.085.29" />
+                                </svg>
+                            </div>
+                            <div>
+                                <p className="font-clash font-semibold text-white group-hover:text-accent-light transition-colors">Public</p>
+                                <p className="font-satoshi text-xs text-white/30">Share with the community</p>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+// ── Toast notification ──────────────────────────────
+function Toast({ message, onClose }) {
+    useEffect(() => {
+        const timer = setTimeout(onClose, 3500)
+        return () => clearTimeout(timer)
+    }, [onClose])
+
+    return (
+        <div className="toast">
+            <div className="flex items-center gap-3">
+                <div className="w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                    <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                </div>
+                <span className="font-satoshi text-sm text-white/80">{message}</span>
+            </div>
+        </div>
+    )
+}
+
+// ═══════════════════════════════════════════════════════
+//  MAIN PAGE COMPONENT
+// ═══════════════════════════════════════════════════════
+export default function SkillBuilder() {
+    const { isLoggedIn, signIn } = useAuth()
+
+    // Form state
+    const [skillName, setSkillName] = useState('')
+    const [description, setDescription] = useState('')
+
+    // Generation state
+    const [isGenerating, setIsGenerating] = useState(false)
+    const [generatedMarkdown, setGeneratedMarkdown] = useState('')
+    const [showOutput, setShowOutput] = useState(false)
+
+    // UI state
+    const [showSignInModal, setShowSignInModal] = useState(false)
+    const [showSaveModal, setShowSaveModal] = useState(false)
+    const [toast, setToast] = useState(null)
+    const [pendingGenerate, setPendingGenerate] = useState(false)
+    const [copied, setCopied] = useState(false)
+    const [refinementInstruction, setRefinementInstruction] = useState('')
+    const [isRefining, setIsRefining] = useState(false)
+
+    const outputRef = useRef(null)
+
+    // If user just signed in and had a pending generation, trigger it
+    useEffect(() => {
+        if (isLoggedIn && pendingGenerate) {
+            setPendingGenerate(false)
+            setShowSignInModal(false)
+            handleGenerate()
+        }
+    }, [isLoggedIn, pendingGenerate])
+
+    async function handleGenerate() {
+        if (!skillName.trim() || !description.trim()) return
+
+        if (!isLoggedIn) {
+            setPendingGenerate(true)
+            setShowSignInModal(true)
+            return
+        }
+
+        setIsGenerating(true)
+        setShowOutput(false)
+        setGeneratedMarkdown('')
+        setRefinementInstruction('')
+
+        try {
+            const res = await fetch('/api/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    skillName: skillName.trim(),
+                    description: description.trim(),
+                }),
+            })
+
+            const data = await res.json()
+
+            if (!res.ok) {
+                setToast(data.error || 'Something went wrong. Please try again.')
+                setIsGenerating(false)
+                return
+            }
+
+            setGeneratedMarkdown(data.markdown)
+            setIsGenerating(false)
+            setShowOutput(true)
+
+            // Scroll to output
+            setTimeout(() => {
+                outputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }, 100)
+        } catch (err) {
+            setToast('Network error. Please check your connection.')
+            setIsGenerating(false)
+        }
+    }
+
+    async function handleRefine() {
+        if (!refinementInstruction.trim() || isRefining) return
+
+        setIsRefining(true)
+
+        try {
+            const res = await fetch('/api/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    skillName: skillName.trim(),
+                    previousMarkdown: generatedMarkdown,
+                    refinementInstruction: refinementInstruction.trim(),
+                }),
+            })
+
+            const data = await res.json()
+
+            if (!res.ok) {
+                setToast(data.error || 'Something went wrong. Please try again.')
+                setIsRefining(false)
+                return
+            }
+
+            setGeneratedMarkdown(data.markdown)
+            setRefinementInstruction('') // Clear refinement input after success
+            setIsRefining(false)
+            setToast('Skill refined successfully!')
+
+            // Scroll to output
+            setTimeout(() => {
+                outputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }, 100)
+        } catch (err) {
+            setToast('Network error. Please check your connection.')
+            setIsRefining(false)
+        }
+    }
+
+    function handleSignInFromModal() {
+        signIn()
+        // The useEffect above will trigger handleGenerate
+    }
+
+    function handleCopy() {
+        navigator.clipboard.writeText(generatedMarkdown)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+        setToast('Copied to clipboard!')
+    }
+
+    function handleDownload() {
+        const blob = new Blob([generatedMarkdown], { type: 'text/markdown' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${skillName.trim().toLowerCase().replace(/\s+/g, '-')}.md`
+        a.click()
+        URL.revokeObjectURL(url)
+        setToast('Downloaded!')
+    }
+
+    function handleSave(visibility) {
+        setShowSaveModal(false)
+        // Mock save — in prod this would hit Supabase
+        setToast(`Skill saved as ${visibility}!`)
+    }
+
+    const canSubmit = skillName.trim().length > 0 && description.trim().length > 0
+    const canRefine = refinementInstruction.trim().length > 0 && !isRefining
+
+    return (
+        <div className="min-h-screen pt-28 pb-20">
+            {/* Ambient glow */}
+            <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-accent/[0.04] rounded-full blur-[140px] pointer-events-none" />
+
+            <div className="max-w-3xl mx-auto px-6 lg:px-8">
+                {/* ── Header ─────────────────────────── */}
+                <div className="text-center mb-14">
+                    <span className="inline-block font-satoshi text-sm font-medium tracking-widest uppercase text-accent/70 mb-4">
+                        Skill Builder
+                    </span>
+                    <h1 className="font-clash font-bold text-4xl sm:text-5xl lg:text-6xl tracking-tight leading-[1.1] mb-5">
+                        Describe it.{' '}
+                        <span className="italic text-accent glow-text">We'll build it.</span>
+                    </h1>
+                    <p className="font-satoshi text-lg text-white/40 max-w-xl mx-auto">
+                        Tell us what you want your AI to do, and we'll turn it into a
+                        ready-to-use skill file in seconds.
+                    </p>
+                </div>
+
+                {/* ── Form Card ──────────────────────── */}
+                <div className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.03] via-transparent to-transparent p-6 sm:p-8">
+                    {/* Skill Name */}
+                    <div className="mb-6">
+                        <label className="block font-clash font-semibold text-sm text-white/60 mb-2.5">
+                            Skill Name
+                        </label>
+                        <input
+                            type="text"
+                            value={skillName}
+                            onChange={(e) => setSkillName(e.target.value)}
+                            placeholder="e.g. Blog Post Writer, Study Buddy, Brand Designer"
+                            className="w-full px-4 py-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] focus:border-accent/40 focus:bg-white/[0.05] text-white placeholder:text-white/20 font-satoshi text-[0.95rem] outline-none transition-all duration-300"
+                        />
+                    </div>
+
+                    {/* Description */}
+                    <div className="mb-8">
+                        <label className="block font-clash font-semibold text-sm text-white/60 mb-2.5">
+                            What should this skill do?
+                        </label>
+                        <textarea
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            placeholder="Describe what you want your AI to do. Be as detailed as possible — the more you describe, the better the skill.
+
+For example: 'I want my AI to write blog posts in a conversational, friendly tone. It should always include a hook at the start, break content into short paragraphs, use analogies to explain complex ideas, and end with a clear call to action.'"
+                            rows={8}
+                            className="w-full px-4 py-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] focus:border-accent/40 focus:bg-white/[0.05] text-white placeholder:text-white/20 font-satoshi text-[0.95rem] outline-none transition-all duration-300 resize-y min-h-[180px]"
+                        />
+                    </div>
+
+                    {/* Submit button */}
+                    <button
+                        onClick={handleGenerate}
+                        disabled={!canSubmit || isGenerating}
+                        className={`w-full sm:w-auto flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-xl font-satoshi font-bold text-[0.95rem] transition-all duration-300 ${canSubmit && !isGenerating
+                            ? 'bg-accent text-navy hover:bg-[#6bbcff] hover:shadow-[0_0_30px_rgba(75,169,255,0.3)] hover:-translate-y-0.5 cursor-pointer'
+                            : 'bg-white/5 text-white/20 cursor-not-allowed'
+                            }`}
+                    >
+                        {isGenerating ? (
+                            <>
+                                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                </svg>
+                                Creating…
+                            </>
+                        ) : (
+                            <>
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
+                                </svg>
+                                Create Skill
+                            </>
+                        )}
+                    </button>
+                </div>
+
+                {/* ── Loading State ───────────────────── */}
+                {isGenerating && <LoadingState />}
+
+                {/* ── Generated Output ────────────────── */}
+                {showOutput && (
+                    <div
+                        ref={outputRef}
+                        className="mt-12 animate-fade-in-up"
+                    >
+                        {/* Output header */}
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 glow-dot" style={{ boxShadow: '0 0 12px rgba(52,211,153,0.6)' }} />
+                            <span className="font-clash font-semibold text-lg text-white/80">
+                                Your skill is ready
+                            </span>
+                        </div>
+
+                        {/* Editor-style textarea */}
+                        <div className="rounded-2xl border border-accent/15 bg-[#0a0d17] overflow-hidden">
+                            {/* Editor top bar */}
+                            <div className="flex items-center justify-between px-5 py-3 border-b border-white/5 bg-white/[0.02]">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-3 h-3 rounded-full bg-red-500/50" />
+                                    <div className="w-3 h-3 rounded-full bg-yellow-500/50" />
+                                    <div className="w-3 h-3 rounded-full bg-green-500/50" />
+                                </div>
+                                <span className="font-mono text-xs text-white/20">
+                                    {skillName.trim().toLowerCase().replace(/\s+/g, '-')}.md
+                                </span>
+                            </div>
+
+                            {/* Editable content */}
+                            <textarea
+                                value={generatedMarkdown}
+                                onChange={(e) => setGeneratedMarkdown(e.target.value)}
+                                className="skill-editor"
+                                rows={20}
+                            />
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex flex-wrap gap-3 mt-6">
+                            <button
+                                onClick={handleCopy}
+                                className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/10 bg-white/[0.03] hover:border-accent/30 hover:bg-white/[0.06] transition-all duration-300 group"
+                            >
+                                {copied ? (
+                                    <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                    </svg>
+                                ) : (
+                                    <svg className="w-4 h-4 text-white/40 group-hover:text-accent transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+                                    </svg>
+                                )}
+                                <span className="font-satoshi text-sm text-white/60 group-hover:text-white/80 transition-colors">
+                                    {copied ? 'Copied!' : 'Copy to Clipboard'}
+                                </span>
+                            </button>
+
+                            <button
+                                onClick={handleDownload}
+                                className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/10 bg-white/[0.03] hover:border-accent/30 hover:bg-white/[0.06] transition-all duration-300 group"
+                            >
+                                <svg className="w-4 h-4 text-white/40 group-hover:text-accent transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                                </svg>
+                                <span className="font-satoshi text-sm text-white/60 group-hover:text-white/80 transition-colors">
+                                    Download .md
+                                </span>
+                            </button>
+
+                            <button
+                                onClick={() => setShowSaveModal(true)}
+                                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent/10 border border-accent/20 hover:bg-accent/20 hover:border-accent/40 transition-all duration-300 group"
+                            >
+                                <svg className="w-4 h-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
+                                </svg>
+                                <span className="font-satoshi text-sm font-medium text-accent">
+                                    Save to Profile
+                                </span>
+                            </button>
+                        </div>
+
+                        {/* ── Refinement Section ───────────── */}
+                        <div className="mt-12 pt-10 border-t border-white/5">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="w-6 h-6 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center">
+                                    <svg className="w-3.5 h-3.5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                                    </svg>
+                                </div>
+                                <h3 className="font-clash font-semibold text-lg text-white/80">Refine with sentences</h3>
+                            </div>
+
+                            <div className="relative group">
+                                <textarea
+                                    value={refinementInstruction}
+                                    onChange={(e) => setRefinementInstruction(e.target.value)}
+                                    placeholder="Need changes? Tell AI what to adjust. e.g. 'Make the instructions more detailed' or 'Add a section for potential pitfalls'"
+                                    rows={3}
+                                    className="w-full px-5 py-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] focus:border-accent/40 focus:bg-white/[0.05] text-white placeholder:text-white/20 font-satoshi text-[0.95rem] outline-none transition-all duration-300 resize-none pr-32"
+                                />
+                                <div className="absolute right-3 bottom-3">
+                                    <button
+                                        onClick={handleRefine}
+                                        disabled={!canRefine}
+                                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-satoshi font-bold text-sm transition-all duration-300 ${canRefine
+                                            ? 'bg-accent text-navy hover:bg-[#6bbcff] hover:shadow-[0_0_20px_rgba(75,169,255,0.2)]'
+                                            : 'bg-white/5 text-white/10 cursor-not-allowed'
+                                            }`}
+                                    >
+                                        {isRefining ? (
+                                            <>
+                                                <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                                </svg>
+                                                Refining…
+                                            </>
+                                        ) : (
+                                            'Refine Skill'
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                            <p className="mt-3 font-satoshi text-xs text-white/20 ml-1">
+                                AI will update the code above based on your feedback.
+                            </p>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* ── Modals ─────────────────────────────── */}
+            {showSignInModal && (
+                <SignInModal
+                    onClose={() => { setShowSignInModal(false); setPendingGenerate(false) }}
+                    onSignIn={handleSignInFromModal}
+                />
+            )}
+
+            {showSaveModal && (
+                <SaveModal
+                    onClose={() => setShowSaveModal(false)}
+                    onSave={handleSave}
+                />
+            )}
+
+            {/* ── Toast ──────────────────────────────── */}
+            {toast && (
+                <Toast
+                    message={toast}
+                    onClose={() => setToast(null)}
+                />
+            )}
+        </div>
+    )
+}
