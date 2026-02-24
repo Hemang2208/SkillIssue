@@ -1,4 +1,5 @@
 import { Routes, Route } from 'react-router-dom'
+import { useAuth } from './context/AuthContext'
 import Navbar from './components/Navbar'
 import Hero from './components/Hero'
 import WhatIsSkillFile from './components/WhatIsSkillFile'
@@ -7,6 +8,8 @@ import Features from './components/Features'
 import CTA from './components/CTA'
 import Footer from './components/Footer'
 import SkillBuilder from './pages/SkillBuilder'
+import AuthModal from './components/AuthModal'
+import OnboardingModal from './components/OnboardingModal'
 
 function LandingPage() {
     return (
@@ -22,6 +25,8 @@ function LandingPage() {
 }
 
 export default function App() {
+    const { showAuthModal, needsOnboarding } = useAuth()
+
     return (
         <div className="relative min-h-screen bg-navy text-white">
             {/* Grid Background */}
@@ -35,6 +40,10 @@ export default function App() {
                     <Route path="/build" element={<SkillBuilder />} />
                 </Routes>
             </div>
+
+            {/* Global Modals (rendered above everything) */}
+            {showAuthModal && <AuthModal />}
+            {needsOnboarding && <OnboardingModal />}
         </div>
     )
 }

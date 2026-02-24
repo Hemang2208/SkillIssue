@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 export default function Navbar() {
     const [scrolled, setScrolled] = useState(false)
     const [mobileOpen, setMobileOpen] = useState(false)
-    const { user, isLoggedIn, signIn, signOut } = useAuth()
+    const { user, isLoggedIn, openAuthModal, signOut } = useAuth()
     const location = useLocation()
     const isHome = location.pathname === '/'
 
@@ -35,8 +35,8 @@ export default function Navbar() {
             <Link
                 to={to}
                 className={`font-satoshi text-sm transition-colors duration-300 ${location.pathname === to
-                        ? 'text-accent font-medium'
-                        : 'text-white/60 hover:text-accent-light'
+                    ? 'text-accent font-medium'
+                    : 'text-white/60 hover:text-accent-light'
                     }`}
             >
                 {children}
@@ -82,11 +82,19 @@ export default function Navbar() {
                     <div className="hidden md:block">
                         {isLoggedIn ? (
                             <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center">
-                                    <span className="font-clash font-bold text-xs text-accent">
-                                        {user?.name?.charAt(0) || 'U'}
-                                    </span>
-                                </div>
+                                {user?.user_metadata?.avatar_url ? (
+                                    <img
+                                        src={user.user_metadata.avatar_url}
+                                        alt={user.user_metadata.full_name || 'User'}
+                                        className="w-8 h-8 rounded-full border border-accent/30 object-cover"
+                                    />
+                                ) : (
+                                    <div className="w-8 h-8 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center">
+                                        <span className="font-clash font-bold text-xs text-accent">
+                                            {user?.user_metadata?.full_name?.charAt(0) ?? 'U'}
+                                        </span>
+                                    </div>
+                                )}
                                 <button
                                     onClick={signOut}
                                     className="font-satoshi text-sm text-white/40 hover:text-white/70 transition-colors duration-300"
@@ -96,7 +104,7 @@ export default function Navbar() {
                             </div>
                         ) : (
                             <button
-                                onClick={signIn}
+                                onClick={openAuthModal}
                                 className="flex items-center gap-2.5 px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:border-accent/30 hover:bg-white/10 transition-all duration-300 group"
                             >
                                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">
@@ -144,15 +152,30 @@ export default function Navbar() {
                         </Link>
 
                         {isLoggedIn ? (
-                            <button
-                                onClick={signOut}
-                                className="block font-satoshi text-sm text-white/40 hover:text-white/70 py-2 mt-3"
-                            >
-                                Sign out ({user?.name})
-                            </button>
+                            <div className="flex items-center gap-3 mt-3">
+                                {user?.user_metadata?.avatar_url ? (
+                                    <img
+                                        src={user.user_metadata.avatar_url}
+                                        alt={user.user_metadata.full_name || 'User'}
+                                        className="w-8 h-8 rounded-full border border-accent/30 object-cover"
+                                    />
+                                ) : (
+                                    <div className="w-8 h-8 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center">
+                                        <span className="font-clash font-bold text-xs text-accent">
+                                            {user?.user_metadata?.full_name?.charAt(0) ?? 'U'}
+                                        </span>
+                                    </div>
+                                )}
+                                <button
+                                    onClick={signOut}
+                                    className="font-satoshi text-sm text-white/40 hover:text-white/70 py-2"
+                                >
+                                    Sign out ({user?.user_metadata?.full_name ?? user?.email})
+                                </button>
+                            </div>
                         ) : (
                             <button
-                                onClick={signIn}
+                                onClick={openAuthModal}
                                 className="flex items-center gap-2 mt-3 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 w-full"
                             >
                                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">

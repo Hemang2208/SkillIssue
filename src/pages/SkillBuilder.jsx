@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { saveSkill } from '../lib/skillService'
 
 // ── Google icon SVG (reusable) ──────────────────────
 function GoogleIcon({ className = 'w-4 h-4' }) {
@@ -55,47 +56,6 @@ function LoadingState() {
     )
 }
 
-// ── Sign-in modal ───────────────────────────────────
-function SignInModal({ onClose, onSignIn }) {
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div
-                className="modal-card"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <button
-                    onClick={onClose}
-                    className="absolute top-4 right-4 text-white/30 hover:text-white/60 transition-colors"
-                >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-
-                <div className="text-center">
-                    <div className="w-14 h-14 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center mx-auto mb-5">
-                        <svg className="w-7 h-7 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                        </svg>
-                    </div>
-                    <h3 className="font-clash font-bold text-2xl mb-2">Sign in to continue</h3>
-                    <p className="font-satoshi text-sm text-white/40 mb-8">
-                        You need to be signed in to generate AI skills.
-                    </p>
-                    <button
-                        onClick={onSignIn}
-                        className="w-full flex items-center justify-center gap-3 px-6 py-3.5 rounded-xl bg-white/5 border border-white/10 hover:border-accent/30 hover:bg-white/10 transition-all duration-300 group"
-                    >
-                        <GoogleIcon />
-                        <span className="font-satoshi text-sm font-medium text-white/80 group-hover:text-white transition-colors">
-                            Sign in with Google
-                        </span>
-                    </button>
-                </div>
-            </div>
-        </div>
-    )
-}
 
 // ── Save visibility modal ───────────────────────────
 function SaveModal({ onClose, onSave }) {
@@ -182,7 +142,7 @@ function Toast({ message, onClose }) {
 //  MAIN PAGE COMPONENT
 // ═══════════════════════════════════════════════════════
 export default function SkillBuilder() {
-    const { isLoggedIn, signIn } = useAuth()
+    const { isLoggedIn, openAuthModal } = useAuth()
 
     // Form state
     const [skillName, setSkillName] = useState('')
@@ -194,11 +154,11 @@ export default function SkillBuilder() {
     const [showOutput, setShowOutput] = useState(false)
 
     // UI state
-    const [showSignInModal, setShowSignInModal] = useState(false)
     const [showSaveModal, setShowSaveModal] = useState(false)
     const [toast, setToast] = useState(null)
     const [pendingGenerate, setPendingGenerate] = useState(false)
     const [copied, setCopied] = useState(false)
+    const [isSaving, setIsSaving] = useState(false)
     const [refinementInstruction, setRefinementInstruction] = useState('')
     const [isRefining, setIsRefining] = useState(false)
 
@@ -208,7 +168,6 @@ export default function SkillBuilder() {
     useEffect(() => {
         if (isLoggedIn && pendingGenerate) {
             setPendingGenerate(false)
-            setShowSignInModal(false)
             handleGenerate()
         }
     }, [isLoggedIn, pendingGenerate])
@@ -218,7 +177,7 @@ export default function SkillBuilder() {
 
         if (!isLoggedIn) {
             setPendingGenerate(true)
-            setShowSignInModal(true)
+            openAuthModal()
             return
         }
 
@@ -299,8 +258,7 @@ export default function SkillBuilder() {
     }
 
     function handleSignInFromModal() {
-        signIn()
-        // The useEffect above will trigger handleGenerate
+        openAuthModal()
     }
 
     function handleCopy() {
@@ -321,10 +279,23 @@ export default function SkillBuilder() {
         setToast('Downloaded!')
     }
 
-    function handleSave(visibility) {
+    async function handleSave(visibility) {
         setShowSaveModal(false)
-        // Mock save — in prod this would hit Supabase
-        setToast(`Skill saved as ${visibility}!`)
+        setIsSaving(true)
+        try {
+            await saveSkill({
+                title: skillName.trim(),
+                content: generatedMarkdown,
+                tags: [],
+                visibility, // 'public' | 'private'
+            })
+            setToast(`Skill saved as ${visibility}! ✓`)
+        } catch (err) {
+            console.error('Save error:', err)
+            setToast(`Failed to save: ${err.message}`)
+        } finally {
+            setIsSaving(false)
+        }
     }
 
     const canSubmit = skillName.trim().length > 0 && description.trim().length > 0
@@ -485,13 +456,21 @@ For example: 'I want my AI to write blog posts in a conversational, friendly ton
 
                             <button
                                 onClick={() => setShowSaveModal(true)}
-                                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent/10 border border-accent/20 hover:bg-accent/20 hover:border-accent/40 transition-all duration-300 group"
+                                disabled={isSaving}
+                                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent/10 border border-accent/20 transition-all duration-300 group ${isSaving ? 'opacity-50 cursor-wait' : 'hover:bg-accent/20 hover:border-accent/40'}`}
                             >
-                                <svg className="w-4 h-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
-                                </svg>
+                                {isSaving ? (
+                                    <svg className="w-4 h-4 text-accent animate-spin" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                    </svg>
+                                ) : (
+                                    <svg className="w-4 h-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
+                                    </svg>
+                                )}
                                 <span className="font-satoshi text-sm font-medium text-accent">
-                                    Save to Profile
+                                    {isSaving ? 'Saving…' : 'Save to Profile'}
                                 </span>
                             </button>
                         </div>
@@ -547,13 +526,6 @@ For example: 'I want my AI to write blog posts in a conversational, friendly ton
             </div>
 
             {/* ── Modals ─────────────────────────────── */}
-            {showSignInModal && (
-                <SignInModal
-                    onClose={() => { setShowSignInModal(false); setPendingGenerate(false) }}
-                    onSignIn={handleSignInFromModal}
-                />
-            )}
-
             {showSaveModal && (
                 <SaveModal
                     onClose={() => setShowSaveModal(false)}

@@ -87,14 +87,19 @@ export default function Footer() {
                     </p>
 
                     {/* Developed By - Centered, Minimal, Big */}
-                    <div className="flex justify-center items-center gap-3 order-1 md:order-2 w-fit mx-auto transition-transform hover:scale-105 duration-300 cursor-pointer group">
+                    <a
+                        href="https://www.bajpai.tech"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex justify-center items-center gap-3 order-1 md:order-2 w-fit mx-auto transition-transform hover:scale-105 duration-300 cursor-pointer group"
+                    >
                         <span className="font-clash text-lg sm:text-xl text-white/50 group-hover:text-white transition-colors">Developed by</span>
                         <img
                             src="/bajpailogo.png"
                             alt="Developed by"
                             className="h-6 sm:h-7 w-auto opacity-70 group-hover:opacity-100 transition-opacity duration-300"
                         />
-                    </div>
+                    </a>
 
                     <div className="flex gap-6 justify-center md:justify-end order-3">
                         <a href="#" className="font-satoshi text-xs text-white/20 hover:text-white/40 transition-colors">Privacy</a>
