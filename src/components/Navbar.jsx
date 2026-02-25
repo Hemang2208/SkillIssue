@@ -68,11 +68,12 @@ export default function Navbar() {
                             <>
                                 <NavLink href="#features">Features</NavLink>
                                 <NavLink href="#how-it-works">How it Works</NavLink>
-                                <NavLink href="#browse">Browse Skills</NavLink>
+                                <NavLink to="/browse">Browse Skills</NavLink>
                             </>
                         ) : (
                             <>
                                 <NavLink to="/">Home</NavLink>
+                                <NavLink to="/browse">Browse Skills</NavLink>
                             </>
                         )}
                         <NavLink to="/build">Build a Skill</NavLink>
@@ -153,10 +154,13 @@ export default function Navbar() {
                             <>
                                 <a href="#features" className="block font-satoshi text-sm text-white/60 hover:text-accent-light py-2">Features</a>
                                 <a href="#how-it-works" className="block font-satoshi text-sm text-white/60 hover:text-accent-light py-2">How it Works</a>
-                                <a href="#browse" className="block font-satoshi text-sm text-white/60 hover:text-accent-light py-2">Browse Skills</a>
+                                <Link to="/browse" className="block font-satoshi text-sm text-white/60 hover:text-accent-light py-2">Browse Skills</Link>
                             </>
                         ) : (
-                            <Link to="/" className="block font-satoshi text-sm text-white/60 hover:text-accent-light py-2">Home</Link>
+                            <>
+                                <Link to="/" className="block font-satoshi text-sm text-white/60 hover:text-accent-light py-2">Home</Link>
+                                <Link to="/browse" className="block font-satoshi text-sm text-white/60 hover:text-accent-light py-2">Browse Skills</Link>
+                            </>
                         )}
                         <Link to="/build" className={`block font-satoshi text-sm py-2 ${location.pathname === '/build' ? 'text-accent font-medium' : 'text-white/60 hover:text-accent-light'}`}>
                             Build a Skill
