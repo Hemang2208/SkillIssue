@@ -197,14 +197,14 @@ export default function Hero() {
                     </div>
 
                     {/* Right — Megamind */}
-                    <div className="relative flex justify-center lg:justify-end">
+                    <div className="relative flex justify-center lg:justify-end lg:self-start lg:pt-8">
                         <div className="relative">
                             {/* Glow behind megamind */}
                             <div className="absolute inset-0 bg-accent/10 rounded-3xl blur-3xl scale-110" />
                             <img
                                 src="/megamind.png"
                                 alt="Megamind — Does your AI have a skill issue?"
-                                className="relative z-10 w-full max-w-md lg:max-w-lg rounded-2xl"
+                                className="relative z-10 w-full max-w-md lg:max-w-lg rounded-2xl object-cover object-top"
                                 style={{
                                     filter: 'drop-shadow(0 0 60px rgba(75, 169, 255, 0.15))',
                                 }}

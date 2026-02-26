@@ -2,10 +2,12 @@ import { useState, useEffect, useCallback } from 'react'
 import {
     fetchAllFeaturedSkills,
     fetchSkillFiles,
-    fetchFileContent,
+    fetchFileContentByPath,
     downloadSkillAsZip,
     getOrgAvatarUrl,
     FEATURED_SOURCES,
+    COMMUNITY_FLAT_SOURCES,
+    OPENCLAW_SOURCE,
 } from '../lib/githubService'
 import FeaturedSkillCard from '../components/FeaturedSkillCard'
 
@@ -45,16 +47,11 @@ function SkillModal({ skill, onClose }) {
 
         fetchSkillFiles(skill.repo, skill.path)
             .then((files) => {
-                // Look for SKILL.md first, then any .md file
-                const skillMd = files.find(
-                    (f) => f.name.toUpperCase() === 'SKILL.MD'
-                )
-                const anyMd = files.find((f) =>
-                    f.name.toLowerCase().endsWith('.md')
-                )
+                const skillMd = files.find((f) => f.name.toUpperCase() === 'SKILL.MD')
+                const anyMd = files.find((f) => f.name.toLowerCase().endsWith('.md'))
                 const target = skillMd || anyMd
-                if (!target) throw new Error('No .md file found')
-                return fetchFileContent(target.download_url)
+                if (!target) throw new Error('No .md file found in this skill folder.')
+                return fetchFileContentByPath(skill.repo, target.path)
             })
             .then((text) => setContent(text))
             .catch((err) => setError(err.message))
@@ -88,6 +85,8 @@ function SkillModal({ skill, onClose }) {
 
     if (!skill) return null
 
+    const isOpenClaw = skill.isOpenClaw
+
     return (
         <div
             className="fixed inset-0 z-50 flex items-center justify-center"
@@ -105,24 +104,46 @@ function SkillModal({ skill, onClose }) {
                 <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06] bg-white/[0.02] shrink-0">
                     <div className="flex items-center gap-3 min-w-0">
                         <img
-                            src={getOrgAvatarUrl(skill.repo)}
-                            alt={skill.company}
-                            className="w-8 h-8 rounded-lg border border-white/10"
+                            src={isOpenClaw
+                                ? `https://avatars.githubusercontent.com/${skill.author}`
+                                : getOrgAvatarUrl(skill.repo)}
+                            alt={isOpenClaw ? skill.author : skill.company}
+                            className={`w-8 h-8 border border-white/10 ${isOpenClaw ? 'rounded-full' : 'rounded-lg'}`}
                         />
                         <div className="min-w-0">
                             <h2 className="font-clash font-bold text-lg text-white truncate">
                                 {skill.displayName}
                             </h2>
                             <p className="font-satoshi text-xs text-white/35">
-                                {skill.company} · ⭐ {skill.stars?.toLocaleString()}
+                                {isOpenClaw
+                                    ? <a
+                                        href={skill.attributionUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="font-mono text-violet-300/70 hover:text-violet-200 transition-colors"
+                                    >
+                                        {skill.attributionLabel}
+                                    </a>
+                                    : <>{skill.company} · ⭐ {skill.stars?.toLocaleString()}</>
+                                }
                             </p>
                         </div>
-                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent/10 border border-accent/20 text-accent text-[10px] font-satoshi font-bold uppercase tracking-wider shrink-0">
-                            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M8.603 3.799A4.49 4.49 0 0112 2.25c1.357 0 2.573.6 3.397 1.549a4.49 4.49 0 013.498 1.307 4.491 4.491 0 011.307 3.497A4.49 4.49 0 0121.75 12a4.49 4.49 0 01-1.549 3.397 4.491 4.491 0 01-1.307 3.497 4.491 4.491 0 01-3.497 1.307A4.49 4.49 0 0112 21.75a4.49 4.49 0 01-3.397-1.549 4.49 4.49 0 01-3.498-1.306 4.491 4.491 0 01-1.307-3.498A4.49 4.49 0 012.25 12c0-1.357.6-2.573 1.549-3.397a4.49 4.49 0 011.307-3.497 4.49 4.49 0 013.497-1.307zm7.007 6.387a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" />
-                            </svg>
-                            Official
-                        </span>
+                        {(skill.isOpenClaw || skill.isCommunity) ? (
+                            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-300 text-[10px] font-satoshi font-bold uppercase tracking-wider shrink-0">
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                Community
+                            </span>
+                        ) : (
+                            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent/10 border border-accent/20 text-accent text-[10px] font-satoshi font-bold uppercase tracking-wider shrink-0">
+                                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M8.603 3.799A4.49 4.49 0 0112 2.25c1.357 0 2.573.6 3.397 1.549a4.49 4.49 0 013.498 1.307 4.491 4.491 0 011.307 3.497A4.49 4.49 0 0121.75 12a4.49 4.49 0 01-1.549 3.397 4.491 4.491 0 01-1.307 3.497 4.491 4.491 0 01-3.497 1.307A4.49 4.49 0 0112 21.75a4.49 4.49 0 01-3.397-1.549 4.49 4.49 0 01-3.498-1.306 4.491 4.491 0 01-1.307-3.498A4.49 4.49 0 012.25 12c0-1.357.6-2.573 1.549-3.397a4.49 4.49 0 011.307-3.497 4.49 4.49 0 013.497-1.307zm7.007 6.387a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" />
+                                </svg>
+                                Official
+                            </span>
+                        )}
                     </div>
                     <button
                         onClick={onClose}
@@ -220,7 +241,7 @@ function SkillModal({ skill, onClose }) {
                         </button>
 
                         <a
-                            href={skill.htmlUrl}
+                            href={skill.htmlUrl || skill.attributionUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/10 bg-white/[0.03] hover:border-accent/30 hover:bg-white/[0.06] transition-all duration-300 group ml-auto"
@@ -241,18 +262,24 @@ function SkillModal({ skill, onClose }) {
 
 // ── Main Page ───────────────────────────────────────────────────────────
 export default function BrowseSkills() {
-    const [skills, setSkills] = useState([])
+    const [officialSkills, setOfficialSkills] = useState([])
+    const [openClawSkills, setOpenClawSkills] = useState([])
+    const [communitySkills, setCommunitySkills] = useState([])
     const [errors, setErrors] = useState([])
     const [loading, setLoading] = useState(true)
     const [activeFilter, setActiveFilter] = useState('All')
     const [selectedSkill, setSelectedSkill] = useState(null)
     const [downloadingId, setDownloadingId] = useState(null)
     const [searchQuery, setSearchQuery] = useState('')
+    const PAGE_SIZE = 48
+    const [ocPage, setOcPage] = useState(1)
 
     useEffect(() => {
         fetchAllFeaturedSkills()
-            .then(({ skills: s, errors: e }) => {
-                setSkills(s)
+            .then(({ skills: s, openClawSkills: oc, communitySkills: cs, errors: e }) => {
+                setOfficialSkills(s)
+                setOpenClawSkills(oc)
+                setCommunitySkills(cs)
                 setErrors(e)
             })
             .catch((err) => {
@@ -262,14 +289,35 @@ export default function BrowseSkills() {
             .finally(() => setLoading(false))
     }, [])
 
-    const companies = ['All', ...FEATURED_SOURCES.map((s) => s.company)]
+    // Reset pagination when search/filter changes
+    useEffect(() => { setOcPage(1) }, [searchQuery, activeFilter])
 
-    const filteredSkills = skills.filter((s) => {
+    // All community filter IDs (OpenClaw + flat community labels)
+    const communityFilterIds = ['OpenClaw', ...COMMUNITY_FLAT_SOURCES.map((s) => s.label)]
+    const isCommunityFilter = communityFilterIds.includes(activeFilter)
+
+    const companies = ['All', ...FEATURED_SOURCES.map((s) => s.company), ...communityFilterIds]
+
+    const q = searchQuery.toLowerCase().trim()
+
+    const filteredOfficial = officialSkills.filter((s) => {
+        if (isCommunityFilter) return false
         const matchesCompany = activeFilter === 'All' || s.company === activeFilter
-        const q = searchQuery.toLowerCase().trim()
         const matchesSearch = !q || s.displayName.toLowerCase().includes(q) || s.name.toLowerCase().includes(q) || s.company.toLowerCase().includes(q)
         return matchesCompany && matchesSearch
     })
+
+    const filteredCommunity = communitySkills.filter((s) => {
+        const matchesFilter = activeFilter === 'All' || activeFilter === s.label
+        return matchesFilter && (!q || s.displayName.toLowerCase().includes(q) || s.name.toLowerCase().includes(q) || s.author?.toLowerCase().includes(q) || s.attributionLabel?.toLowerCase().includes(q))
+    })
+
+    const filteredOpenClaw = openClawSkills.filter((s) => {
+        const matchesFilter = activeFilter === 'All' || activeFilter === 'OpenClaw'
+        return matchesFilter && (!q || s.displayName.toLowerCase().includes(q) || s.name.toLowerCase().includes(q) || s.author.toLowerCase().includes(q) || s.attributionLabel.toLowerCase().includes(q))
+    })
+
+    const totalCount = officialSkills.length + communitySkills.length + openClawSkills.length
 
     const handleDownload = useCallback(async (skill) => {
         const id = `${skill.repo}:${skill.path}`
@@ -314,7 +362,7 @@ export default function BrowseSkills() {
                             type="text"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="Search skills by name or company..."
+                            placeholder="Search skills by name, company, or author..."
                             className="w-full pl-11 pr-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.08] focus:border-accent/40 focus:bg-white/[0.05] text-white placeholder:text-white/20 font-satoshi text-sm outline-none transition-all duration-300"
                         />
                         {searchQuery && (
@@ -330,39 +378,67 @@ export default function BrowseSkills() {
                     </div>
                 </div>
 
-                {/* ── Company filter tabs ─────────────── */}
+                {/* ── Filter tabs ─────────────── */}
                 <div className="flex flex-wrap items-center justify-center gap-2 mb-10">
                     {companies.map((name) => {
                         const isActive = activeFilter === name
-                        const source = FEATURED_SOURCES.find((s) => s.company === name)
+                        const isOC = name === 'OpenClaw'
+                        const flatSource = COMMUNITY_FLAT_SOURCES.find((s) => s.label === name)
+                        const isCommunityTab = isOC || !!flatSource
+                        // First community tab gets the pipe separator
+                        const isFirstCommunity = name === communityFilterIds[0]
+                        const officialSource = FEATURED_SOURCES.find((s) => s.company === name)
+
+                        const count = isOC
+                            ? openClawSkills.length
+                            : flatSource
+                                ? communitySkills.filter((s) => s.label === name).length
+                                : name === 'All'
+                                    ? totalCount
+                                    : officialSkills.filter((s) => s.company === name).length
+
+                        const activeStyle = isCommunityTab && isActive
+                            ? 'bg-violet-500/15 border-violet-500/30 text-violet-300 shadow-[0_0_15px_rgba(139,92,246,0.1)]'
+                            : isActive
+                                ? 'bg-accent/15 border-accent/30 text-accent shadow-[0_0_15px_rgba(75,169,255,0.1)]'
+                                : 'bg-white/[0.02] border-white/[0.06] text-white/40 hover:border-white/15 hover:text-white/60'
+                        const countStyle = isCommunityTab && isActive
+                            ? 'bg-violet-500/20 text-violet-300'
+                            : isActive
+                                ? 'bg-accent/20 text-accent'
+                                : 'bg-white/5 text-white/25'
+
+                        const avatarSrc = isOC
+                            ? 'https://avatars.githubusercontent.com/openclaw'
+                            : flatSource
+                                ? `https://avatars.githubusercontent.com/${flatSource.company}`
+                                : officialSource
+                                    ? getOrgAvatarUrl(officialSource.repo)
+                                    : null
+
                         return (
-                            <button
-                                key={name}
-                                onClick={() => setActiveFilter(name)}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl font-satoshi text-sm font-medium transition-all duration-300 border ${isActive
-                                    ? 'bg-accent/15 border-accent/30 text-accent shadow-[0_0_15px_rgba(75,169,255,0.1)]'
-                                    : 'bg-white/[0.02] border-white/[0.06] text-white/40 hover:border-white/15 hover:text-white/60'
-                                    }`}
-                            >
-                                {source && (
-                                    <img
-                                        src={getOrgAvatarUrl(source.repo)}
-                                        alt={name}
-                                        className="w-4 h-4 rounded"
-                                    />
+                            <div key={name} className="flex items-center gap-2">
+                                {/* Pipe separator before first community tab */}
+                                {isFirstCommunity && (
+                                    <span className="w-px h-5 bg-white/10 rounded-full mx-1 shrink-0" />
                                 )}
-                                {name}
-                                {name !== 'All' && (
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isActive ? 'bg-accent/20 text-accent' : 'bg-white/5 text-white/25'}`}>
-                                        {skills.filter((s) => s.company === name).length}
+                                <button
+                                    onClick={() => setActiveFilter(name)}
+                                    className={`flex items-center gap-2 px-4 py-2 rounded-xl font-satoshi text-sm font-medium transition-all duration-300 border ${activeStyle}`}
+                                >
+                                    {avatarSrc && (
+                                        <img
+                                            src={avatarSrc}
+                                            alt={name}
+                                            className={`w-4 h-4 ${isCommunityTab ? 'rounded-full' : 'rounded'}`}
+                                        />
+                                    )}
+                                    {name}
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${countStyle}`}>
+                                        {count}
                                     </span>
-                                )}
-                                {name === 'All' && (
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isActive ? 'bg-accent/20 text-accent' : 'bg-white/5 text-white/25'}`}>
-                                        {skills.length}
-                                    </span>
-                                )}
-                            </button>
+                                </button>
+                            </div>
                         )
                     })}
                 </div>
@@ -390,10 +466,11 @@ export default function BrowseSkills() {
                     </div>
                 )}
 
-                {/* ── Skills grid ────────────────────── */}
-                {!loading && filteredSkills.length > 0 && (
+                {/* ── Unified skills grid ─────────────────────────────────── */}
+                {!loading && (filteredOfficial.length > 0 || filteredCommunity.length > 0 || filteredOpenClaw.length > 0) && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {filteredSkills.map((skill) => (
+                        {/* Official cards */}
+                        {filteredOfficial.map((skill) => (
                             <FeaturedSkillCard
                                 key={`${skill.repo}:${skill.path}`}
                                 skill={skill}
@@ -402,11 +479,103 @@ export default function BrowseSkills() {
                                 isDownloading={downloadingId === `${skill.repo}:${skill.path}`}
                             />
                         ))}
+
+                        {/* Composio (community flat) divider + cards */}
+                        {filteredCommunity.length > 0 && (
+                            <>
+                                {filteredOfficial.length > 0 && (
+                                    <div className="col-span-1 sm:col-span-2 lg:col-span-3 flex items-center gap-4 py-2">
+                                        <div className="flex-1 h-[1px] bg-gradient-to-r from-transparent via-white/[0.07] to-transparent" />
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <img
+                                                src="https://avatars.githubusercontent.com/ComposioHQ"
+                                                alt="Composio"
+                                                className="w-5 h-5 rounded-full border border-violet-500/30"
+                                            />
+                                            <span className="font-satoshi text-[11px] font-semibold text-white/30 tracking-widest uppercase">Community</span>
+                                            <span className="text-white/15 select-none">·</span>
+                                            <a
+                                                href="https://github.com/ComposioHQ/awesome-claude-skills"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="font-satoshi text-[11px] font-semibold text-violet-400/60 hover:text-violet-300 transition-colors tracking-widest uppercase"
+                                            >
+                                                Composio
+                                            </a>
+                                        </div>
+                                        <div className="flex-1 h-[1px] bg-gradient-to-r from-transparent via-white/[0.07] to-transparent" />
+                                    </div>
+                                )}
+                                {filteredCommunity.map((skill) => (
+                                    <FeaturedSkillCard
+                                        key={`${skill.repo}:${skill.path}`}
+                                        skill={skill}
+                                        onClick={setSelectedSkill}
+                                        onDownload={handleDownload}
+                                        isDownloading={downloadingId === `${skill.repo}:${skill.path}`}
+                                    />
+                                ))}
+                            </>
+                        )}
+
+                        {/* OpenClaw divider + paginated cards */}
+                        {filteredOpenClaw.length > 0 && (
+                            <>
+                                {(filteredOfficial.length > 0 || filteredCommunity.length > 0) && (
+                                    <div className="col-span-1 sm:col-span-2 lg:col-span-3 flex items-center gap-4 py-2">
+                                        <div className="flex-1 h-[1px] bg-gradient-to-r from-transparent via-white/[0.07] to-transparent" />
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <img
+                                                src="https://avatars.githubusercontent.com/openclaw"
+                                                alt="OpenClaw"
+                                                className="w-5 h-5 rounded-full border border-violet-500/30"
+                                            />
+                                            <span className="font-satoshi text-[11px] font-semibold text-white/30 tracking-widest uppercase">Community</span>
+                                            <span className="text-white/15 select-none">·</span>
+                                            <a
+                                                href={OPENCLAW_SOURCE.github_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="font-satoshi text-[11px] font-semibold text-violet-400/60 hover:text-violet-300 transition-colors tracking-widest uppercase"
+                                            >
+                                                OpenClaw
+                                            </a>
+                                        </div>
+                                        <div className="flex-1 h-[1px] bg-gradient-to-r from-transparent via-white/[0.07] to-transparent" />
+                                    </div>
+                                )}
+                                {filteredOpenClaw.slice(0, ocPage * PAGE_SIZE).map((skill) => (
+                                    <FeaturedSkillCard
+                                        key={`${skill.repo}:${skill.path}`}
+                                        skill={skill}
+                                        onClick={setSelectedSkill}
+                                        onDownload={handleDownload}
+                                        isDownloading={downloadingId === `${skill.repo}:${skill.path}`}
+                                    />
+                                ))}
+                                {filteredOpenClaw.length > ocPage * PAGE_SIZE && (
+                                    <div className="col-span-1 sm:col-span-2 lg:col-span-3 flex justify-center pt-2 pb-1">
+                                        <button
+                                            onClick={() => setOcPage((p) => p + 1)}
+                                            className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-violet-500/20 bg-violet-500/[0.05] text-violet-300/70 hover:text-violet-200 hover:border-violet-500/35 hover:bg-violet-500/10 font-satoshi text-sm font-medium transition-all duration-300"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                            Load more from OpenClaw
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-400">
+                                                {filteredOpenClaw.length - ocPage * PAGE_SIZE} remaining
+                                            </span>
+                                        </button>
+                                    </div>
+                                )}
+                            </>
+                        )}
                     </div>
                 )}
 
-                {/* ── Empty state ─────────────────────── */}
-                {!loading && filteredSkills.length === 0 && (
+                {/* ── Empty state ─────────────────────────────────────────── */}
+                {!loading && filteredOfficial.length === 0 && filteredCommunity.length === 0 && filteredOpenClaw.length === 0 && (
                     <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
                         <div className="w-14 h-14 rounded-2xl bg-accent/5 border border-accent/10 flex items-center justify-center">
                             <svg className="w-6 h-6 text-accent/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -414,9 +583,10 @@ export default function BrowseSkills() {
                             </svg>
                         </div>
                         <p className="font-clash font-semibold text-white/25 text-lg">No skills found</p>
-                        <p className="font-satoshi text-sm text-white/15">{searchQuery ? 'Try a different search term' : 'Try selecting a different company filter'}</p>
+                        <p className="font-satoshi text-sm text-white/15">{searchQuery ? 'Try a different search term' : 'Try selecting a different filter'}</p>
                     </div>
                 )}
+
             </div>
 
             {/* ── Skill Detail Modal ──────────── */}
