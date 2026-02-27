@@ -89,10 +89,10 @@ export default function Navbar() {
                                     title="My Profile"
                                     className="relative group/avatar"
                                 >
-                                    {user?.user_metadata?.avatar_url ? (
+                                    {profile?.avatar_url || user?.user_metadata?.avatar_url ? (
                                         <img
-                                            src={user.user_metadata.avatar_url}
-                                            alt={user.user_metadata.full_name || 'User'}
+                                            src={profile?.avatar_url || user.user_metadata.avatar_url}
+                                            alt={profile?.display_name || user?.user_metadata?.full_name || 'User'}
                                             className="w-8 h-8 rounded-full border border-accent/30 object-cover hover:border-accent transition-colors"
                                         />
                                     ) : (
@@ -173,9 +173,9 @@ export default function Navbar() {
                                     onClick={() => setMobileOpen(false)}
                                     className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/[0.04] transition-all"
                                 >
-                                    {user?.user_metadata?.avatar_url ? (
+                                    {profile?.avatar_url || user?.user_metadata?.avatar_url ? (
                                         <img
-                                            src={user.user_metadata.avatar_url}
+                                            src={profile?.avatar_url || user.user_metadata.avatar_url}
                                             alt="Profile"
                                             className="w-8 h-8 rounded-full border border-accent/30 object-cover"
                                         />

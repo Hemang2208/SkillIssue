@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useAuth } from '../context/AuthContext'
 import { saveSkill } from '../lib/skillService'
+import TextareaAutosize from 'react-textarea-autosize'
 
 // ── Google icon SVG (reusable) ──────────────────────
 function GoogleIcon({ className = 'w-4 h-4' }) {
@@ -164,6 +167,7 @@ export default function SkillBuilder() {
     const [isSaving, setIsSaving] = useState(false)
     const [refinementInstruction, setRefinementInstruction] = useState('')
     const [isRefining, setIsRefining] = useState(false)
+    const [viewMode, setViewMode] = useState('rendered') // 'rendered' | 'raw'
 
     const outputRef = useRef(null)
     const fileInputRef = useRef(null)
@@ -236,6 +240,7 @@ export default function SkillBuilder() {
             setGeneratedMarkdown(data.markdown)
             setIsGenerating(false)
             setShowOutput(true)
+            setViewMode('rendered') // reset view on each new generation
 
             // Scroll to output
             setTimeout(() => {
@@ -334,12 +339,12 @@ export default function SkillBuilder() {
     const canRefine = refinementInstruction.trim().length > 0 && !isRefining
 
     return (
-        <div className="min-h-screen pt-28 pb-20">
+        <div className="min-h-screen pt-28 pb-20 relative">
             {/* Ambient glow */}
             <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-accent/[0.04] rounded-full blur-[140px] pointer-events-none" />
 
             <div className="max-w-7xl mx-auto px-6 lg:px-8">
-                {/* ── Header (full-width, centered) ──── */}
+                {/* ── Header (centered) ──── */}
                 <div className="text-center mb-10 max-w-3xl mx-auto">
                     <span className="inline-block font-satoshi text-sm font-medium tracking-widest uppercase text-accent/70 mb-4">
                         Skill Builder
@@ -354,12 +359,12 @@ export default function SkillBuilder() {
                     </p>
                 </div>
 
-                {/* ── Two-column grid ───────────────── */}
+                {/* ── Two-column grid ──────── */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
-                    {/* ── LEFT — Form Card ─────────────── */}
+                    {/* ── LEFT — Form Card ─── */}
                     <div className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.03] via-transparent to-transparent p-6 sm:p-8">
-                        {/* Skill Name */}
+
                         <div className="mb-6">
                             <label className="block font-clash font-semibold text-sm text-white/60 mb-2.5">
                                 Skill Name
@@ -457,42 +462,88 @@ export default function SkillBuilder() {
                         </div>
 
                         {/* Submit button */}
-                        <button
-                            onClick={handleGenerate}
-                            disabled={!canSubmit || isGenerating}
-                            className={`w-full flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-xl font-satoshi font-bold text-[0.95rem] transition-all duration-300 ${canSubmit && !isGenerating
-                                ? 'bg-accent text-navy hover:bg-[#6bbcff] hover:shadow-[0_0_30px_rgba(75,169,255,0.3)] hover:-translate-y-0.5 cursor-pointer'
-                                : 'bg-white/5 text-white/20 cursor-not-allowed'
-                                }`}
-                        >
-                            {isGenerating ? (
-                                <>
-                                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                    </svg>
-                                    Creating…
-                                </>
-                            ) : (
-                                <>
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
-                                    </svg>
-                                    Create Skill
-                                </>
+                        <div className="pt-4 mt-8 border-t border-white/[0.05]">
+                            <button
+                                onClick={handleGenerate}
+                                disabled={!canSubmit || isGenerating}
+                                className={`w-full flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-xl font-satoshi font-bold text-[0.95rem] transition-all duration-300 ${canSubmit && !isGenerating
+                                    ? 'bg-accent text-navy hover:bg-[#6bbcff] hover:shadow-[0_0_30px_rgba(75,169,255,0.3)] hover:-translate-y-0.5 cursor-pointer'
+                                    : 'bg-white/5 text-white/20 cursor-not-allowed'
+                                    }`}
+                            >
+                                {isGenerating ? (
+                                    <>
+                                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                        </svg>
+                                        Creating…
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
+                                        </svg>
+                                        Create Skill
+                                    </>
+                                )}
+                            </button>
+
+                            {/* ── Refinement section (Moved to Left Side) ── */}
+                            {showOutput && (
+                                <div className="mt-8 pt-8 border-t border-white/5 animate-fade-in-up">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-6 h-6 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center">
+                                            <svg className="w-3.5 h-3.5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                                            </svg>
+                                        </div>
+                                        <h3 className="font-clash font-semibold text-base text-white/80">Refine with AI</h3>
+                                    </div>
+                                    <div className="relative">
+                                        <TextareaAutosize
+                                            value={refinementInstruction}
+                                            onChange={(e) => setRefinementInstruction(e.target.value)}
+                                            placeholder="Need changes? e.g. 'Make the tone more professional'"
+                                            minRows={1}
+                                            maxRows={4}
+                                            className="w-full px-5 py-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] focus:border-accent/40 focus:bg-white/[0.05] text-white placeholder:text-white/20 font-satoshi text-[0.95rem] outline-none transition-all duration-300 resize-none pr-32 overflow-hidden"
+                                        />
+                                        <div className="absolute right-3 bottom-3">
+                                            <button
+                                                onClick={handleRefine}
+                                                disabled={!canRefine}
+                                                className={`flex items-center gap-2 px-4 py-2 rounded-xl font-satoshi font-bold text-sm transition-all duration-300 ${canRefine
+                                                    ? 'bg-accent text-navy hover:bg-[#6bbcff]'
+                                                    : 'bg-white/5 text-white/10 cursor-not-allowed'
+                                                    }`}
+                                            >
+                                                {isRefining ? (
+                                                    <>
+                                                        <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                                        </svg>
+                                                        Refining…
+                                                    </>
+                                                ) : 'Refine'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
                             )}
-                        </button>
+                        </div> {/* end sticky bottom wrapper */}
                     </div>
 
-                    {/* ── RIGHT — Output Panel ──────────── */}
-                    <div className="min-h-[500px] lg:sticky lg:top-28">
+                    {/* ── RIGHT — Output Panel (Sticky Sidebar) ───── */}
+                    <div className="lg:sticky lg:top-28 flex flex-col gap-6" style={{ height: 'calc(100vh - 140px)' }}>
 
                         {/* Loading */}
                         {isGenerating && <LoadingState />}
 
                         {/* Empty placeholder */}
                         {!isGenerating && !showOutput && (
-                            <div className="h-full min-h-[500px] rounded-2xl border border-white/[0.05] bg-white/[0.01] flex flex-col items-center justify-center gap-4 px-8 text-center">
+                            <div className="h-full rounded-2xl border border-white/[0.05] bg-white/[0.01] flex flex-col items-center justify-center gap-4 px-8 text-center">
                                 <div className="w-12 h-12 rounded-2xl bg-accent/5 border border-accent/10 flex items-center justify-center">
                                     <svg className="w-5 h-5 text-accent/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
@@ -507,9 +558,9 @@ export default function SkillBuilder() {
 
                         {/* Generated output */}
                         {showOutput && (
-                            <div ref={outputRef} className="animate-fade-in-up">
+                            <div ref={outputRef} className="flex flex-col h-full animate-fade-in-up">
                                 {/* Output header */}
-                                <div className="flex items-center gap-3 mb-4">
+                                <div className="flex items-center gap-3 mb-4 flex-shrink-0">
                                     <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" style={{ boxShadow: '0 0 12px rgba(52,211,153,0.6)' }} />
                                     <span className="font-clash font-semibold text-lg text-white/80">
                                         Your skill is ready
@@ -517,7 +568,8 @@ export default function SkillBuilder() {
                                 </div>
 
                                 {/* Editor */}
-                                <div className="rounded-2xl border border-accent/15 bg-[#0a0d17] overflow-hidden">
+                                <div className="flex-1 rounded-2xl border border-accent/15 bg-[#0a0d17] overflow-hidden flex flex-col">
+                                    {/* Editor bar */}
                                     <div className="flex items-center justify-between px-5 py-3 border-b border-white/5 bg-white/[0.02]">
                                         <div className="flex items-center gap-2">
                                             <div className="w-3 h-3 rounded-full bg-red-500/50" />
@@ -527,17 +579,76 @@ export default function SkillBuilder() {
                                         <span className="font-mono text-xs text-white/20">
                                             {skillName.trim().toLowerCase().replace(/\s+/g, '-')}.md
                                         </span>
+                                        {/* Rendered | Raw pill toggle */}
+                                        <div className="flex items-center rounded-lg bg-white/[0.04] border border-white/[0.06] p-0.5">
+                                            <button
+                                                onClick={() => setViewMode('rendered')}
+                                                className={`px-3 py-1 rounded-md font-satoshi text-[11px] font-semibold transition-all duration-200 ${viewMode === 'rendered'
+                                                    ? 'bg-accent/20 text-accent shadow-sm'
+                                                    : 'text-white/30 hover:text-white/55'
+                                                    }`}
+                                            >
+                                                Rendered
+                                            </button>
+                                            <button
+                                                onClick={() => setViewMode('raw')}
+                                                className={`px-3 py-1 rounded-md font-satoshi text-[11px] font-semibold transition-all duration-200 ${viewMode === 'raw'
+                                                    ? 'bg-accent/20 text-accent shadow-sm'
+                                                    : 'text-white/30 hover:text-white/55'
+                                                    }`}
+                                            >
+                                                Raw
+                                            </button>
+                                        </div>
                                     </div>
-                                    <textarea
-                                        value={generatedMarkdown}
-                                        onChange={(e) => setGeneratedMarkdown(e.target.value)}
-                                        className="skill-editor"
-                                        rows={20}
-                                    />
+
+                                    {/* Rendered view */}
+                                    {viewMode === 'rendered' && (
+                                        <div className="p-6 overflow-y-auto styled-scrollbar h-full">
+                                            <ReactMarkdown
+                                                remarkPlugins={[remarkGfm]}
+                                                components={{
+                                                    h1: ({ children }) => <h1 className="font-satoshi font-semibold text-2xl text-white mb-4 mt-6 first:mt-0 pb-2 border-b border-white/10">{children}</h1>,
+                                                    h2: ({ children }) => <h2 className="font-satoshi font-semibold text-xl text-white/90 mb-3 mt-5 first:mt-0 pb-1.5 border-b border-white/[0.07]">{children}</h2>,
+                                                    h3: ({ children }) => <h3 className="font-satoshi font-medium text-base text-white/85 mb-2 mt-4 first:mt-0">{children}</h3>,
+                                                    h4: ({ children }) => <h4 className="font-satoshi font-medium text-sm text-white/80 mb-2 mt-3 first:mt-0">{children}</h4>,
+                                                    p: ({ children }) => <p className="font-satoshi text-sm text-white/60 mb-3 leading-relaxed last:mb-0">{children}</p>,
+                                                    ul: ({ children }) => <ul className="list-disc list-outside pl-5 mb-3 space-y-1">{children}</ul>,
+                                                    ol: ({ children }) => <ol className="list-decimal list-outside pl-5 mb-3 space-y-1">{children}</ol>,
+                                                    li: ({ children }) => <li className="font-satoshi text-sm text-white/60 leading-relaxed">{children}</li>,
+                                                    strong: ({ children }) => <strong className="font-semibold text-white/85">{children}</strong>,
+                                                    em: ({ children }) => <em className="italic text-white/70">{children}</em>,
+                                                    a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-accent hover:text-[#6bbcff] underline underline-offset-2 transition-colors">{children}</a>,
+                                                    code: ({ inline, children }) => inline
+                                                        ? <code className="font-mono text-[12px] text-accent/90 bg-accent/10 px-1.5 py-0.5 rounded">{children}</code>
+                                                        : <code className="block font-mono text-[12px] text-white/70 bg-white/[0.04] border border-white/[0.06] rounded-xl p-4 overflow-x-auto mb-3 leading-relaxed">{children}</code>,
+                                                    pre: ({ children }) => <>{children}</>,
+                                                    blockquote: ({ children }) => <blockquote className="border-l-2 border-accent/40 pl-4 my-3 italic text-white/45">{children}</blockquote>,
+                                                    hr: () => <hr className="border-none h-px bg-white/10 my-5" />,
+                                                    table: ({ children }) => <div className="overflow-x-auto mb-3"><table className="w-full text-sm font-satoshi border-collapse">{children}</table></div>,
+                                                    thead: ({ children }) => <thead className="border-b border-white/10">{children}</thead>,
+                                                    th: ({ children }) => <th className="text-left py-2 px-3 text-white/70 font-semibold text-xs uppercase tracking-wide">{children}</th>,
+                                                    td: ({ children }) => <td className="py-2 px-3 text-white/50 border-t border-white/[0.05]">{children}</td>,
+                                                    img: ({ src, alt }) => <img src={src} alt={alt} className="max-w-full rounded-lg my-3" />,
+                                                }}
+                                            >
+                                                {generatedMarkdown}
+                                            </ReactMarkdown>
+                                        </div>
+                                    )}
+
+                                    {/* Raw view — editable textarea */}
+                                    {viewMode === 'raw' && (
+                                        <textarea
+                                            value={generatedMarkdown}
+                                            onChange={(e) => setGeneratedMarkdown(e.target.value)}
+                                            className="skill-editor w-full bg-transparent resize-none overflow-y-auto styled-scrollbar h-full"
+                                        />
+                                    )}
                                 </div>
 
                                 {/* Action buttons */}
-                                <div className="flex flex-wrap gap-3 mt-4">
+                                <div className="flex-shrink-0 flex flex-wrap gap-3 mt-4">
                                     <button
                                         onClick={handleCopy}
                                         className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/10 bg-white/[0.03] hover:border-accent/30 hover:bg-white/[0.06] transition-all duration-300 group"
@@ -589,46 +700,7 @@ export default function SkillBuilder() {
                                     </button>
                                 </div>
 
-                                {/* Refinement section */}
-                                <div className="mt-8 pt-8 border-t border-white/5">
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <div className="w-6 h-6 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center">
-                                            <svg className="w-3.5 h-3.5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-                                            </svg>
-                                        </div>
-                                        <h3 className="font-clash font-semibold text-base text-white/80">Refine with AI</h3>
-                                    </div>
-                                    <div className="relative">
-                                        <textarea
-                                            value={refinementInstruction}
-                                            onChange={(e) => setRefinementInstruction(e.target.value)}
-                                            placeholder="Need changes? e.g. 'Make the instructions more detailed' or 'Add a section for potential pitfalls'"
-                                            rows={2}
-                                            className="w-full px-5 py-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] focus:border-accent/40 focus:bg-white/[0.05] text-white placeholder:text-white/20 font-satoshi text-[0.95rem] outline-none transition-all duration-300 resize-none pr-32"
-                                        />
-                                        <div className="absolute right-3 bottom-3">
-                                            <button
-                                                onClick={handleRefine}
-                                                disabled={!canRefine}
-                                                className={`flex items-center gap-2 px-4 py-2 rounded-xl font-satoshi font-bold text-sm transition-all duration-300 ${canRefine
-                                                    ? 'bg-accent text-navy hover:bg-[#6bbcff]'
-                                                    : 'bg-white/5 text-white/10 cursor-not-allowed'
-                                                    }`}
-                                            >
-                                                {isRefining ? (
-                                                    <>
-                                                        <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                                        </svg>
-                                                        Refining…
-                                                    </>
-                                                ) : 'Refine'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
+
                             </div>
                         )}
                     </div>
@@ -637,20 +709,24 @@ export default function SkillBuilder() {
             </div>
 
             {/* ── Modals ─────────────────────────────── */}
-            {showSaveModal && (
-                <SaveModal
-                    onClose={() => setShowSaveModal(false)}
-                    onSave={handleSave}
-                />
-            )}
+            {
+                showSaveModal && (
+                    <SaveModal
+                        onClose={() => setShowSaveModal(false)}
+                        onSave={handleSave}
+                    />
+                )
+            }
 
             {/* ── Toast ──────────────────────────────── */}
-            {toast && (
-                <Toast
-                    message={toast}
-                    onClose={() => setToast(null)}
-                />
-            )}
-        </div>
+            {
+                toast && (
+                    <Toast
+                        message={toast}
+                        onClose={() => setToast(null)}
+                    />
+                )
+            }
+        </div >
     )
 }

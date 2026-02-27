@@ -182,7 +182,7 @@ export default function UserProfile() {
     }
 
     const displayName = profile?.display_name || profile?.username || username
-    const avatarUrl = profile?.avatar_url || null
+    const avatarUrl = profile?.avatar_url || authUser?.user_metadata?.avatar_url || null
     const joinedDate = profile?.created_at
         ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
         : null

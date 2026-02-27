@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import {
     fetchAllFeaturedSkills,
     fetchSkillFiles,
@@ -39,11 +41,13 @@ function SkillModal({ skill, onClose }) {
     const [error, setError] = useState(null)
     const [copied, setCopied] = useState(false)
     const [downloading, setDownloading] = useState(false)
+    const [viewMode, setViewMode] = useState('rendered') // 'rendered' | 'raw'
 
     useEffect(() => {
         if (!skill) return
         setLoading(true)
         setError(null)
+        setViewMode('rendered') // reset to rendered view on each new skill
 
         fetchSkillFiles(skill.repo, skill.path)
             .then((files) => {
@@ -179,7 +183,7 @@ function SkillModal({ skill, onClose }) {
 
                     {content && (
                         <div className="rounded-2xl border border-accent/15 bg-[#0a0d17] overflow-hidden">
-                            {/* Editor bar */}
+                            {/* Editor bar with macOS dots + filename + view toggle */}
                             <div className="flex items-center justify-between px-5 py-3 border-b border-white/5 bg-white/[0.02]">
                                 <div className="flex items-center gap-2">
                                     <div className="w-3 h-3 rounded-full bg-red-500/50" />
@@ -187,11 +191,70 @@ function SkillModal({ skill, onClose }) {
                                     <div className="w-3 h-3 rounded-full bg-green-500/50" />
                                 </div>
                                 <span className="font-mono text-xs text-white/20">SKILL.md</span>
+                                {/* Rendered | Raw pill toggle */}
+                                <div className="flex items-center rounded-lg bg-white/[0.04] border border-white/[0.06] p-0.5">
+                                    <button
+                                        onClick={() => setViewMode('rendered')}
+                                        className={`px-3 py-1 rounded-md font-satoshi text-[11px] font-semibold transition-all duration-200 ${viewMode === 'rendered'
+                                            ? 'bg-accent/20 text-accent shadow-sm'
+                                            : 'text-white/30 hover:text-white/55'
+                                            }`}
+                                    >
+                                        Rendered
+                                    </button>
+                                    <button
+                                        onClick={() => setViewMode('raw')}
+                                        className={`px-3 py-1 rounded-md font-satoshi text-[11px] font-semibold transition-all duration-200 ${viewMode === 'raw'
+                                            ? 'bg-accent/20 text-accent shadow-sm'
+                                            : 'text-white/30 hover:text-white/55'
+                                            }`}
+                                    >
+                                        Raw
+                                    </button>
+                                </div>
                             </div>
-                            {/* Content */}
-                            <pre className="p-5 text-sm font-mono text-white/70 whitespace-pre-wrap overflow-x-auto leading-relaxed max-h-[50vh] overflow-y-auto">
-                                {content}
-                            </pre>
+
+                            {/* Rendered view — pretty markdown */}
+                            {viewMode === 'rendered' && (
+                                <div className="p-6 max-h-[50vh] overflow-y-auto">
+                                    <ReactMarkdown
+                                        remarkPlugins={[remarkGfm]}
+                                        components={{
+                                            h1: ({ children }) => <h1 className="font-satoshi font-semibold text-2xl text-white mb-4 mt-6 first:mt-0 pb-2 border-b border-white/10">{children}</h1>,
+                                            h2: ({ children }) => <h2 className="font-satoshi font-semibold text-xl text-white/90 mb-3 mt-5 first:mt-0 pb-1.5 border-b border-white/[0.07]">{children}</h2>,
+                                            h3: ({ children }) => <h3 className="font-satoshi font-medium text-base text-white/85 mb-2 mt-4 first:mt-0">{children}</h3>,
+                                            h4: ({ children }) => <h4 className="font-satoshi font-medium text-sm text-white/80 mb-2 mt-3 first:mt-0">{children}</h4>,
+                                            p: ({ children }) => <p className="font-satoshi text-sm text-white/60 mb-3 leading-relaxed last:mb-0">{children}</p>,
+                                            ul: ({ children }) => <ul className="list-disc list-outside pl-5 mb-3 space-y-1">{children}</ul>,
+                                            ol: ({ children }) => <ol className="list-decimal list-outside pl-5 mb-3 space-y-1">{children}</ol>,
+                                            li: ({ children }) => <li className="font-satoshi text-sm text-white/60 leading-relaxed">{children}</li>,
+                                            strong: ({ children }) => <strong className="font-semibold text-white/85">{children}</strong>,
+                                            em: ({ children }) => <em className="italic text-white/70">{children}</em>,
+                                            a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-accent hover:text-[#6bbcff] underline underline-offset-2 transition-colors">{children}</a>,
+                                            code: ({ inline, children }) => inline
+                                                ? <code className="font-mono text-[12px] text-accent/90 bg-accent/10 px-1.5 py-0.5 rounded">{children}</code>
+                                                : <code className="block font-mono text-[12px] text-white/70 bg-white/[0.04] border border-white/[0.06] rounded-xl p-4 overflow-x-auto mb-3 leading-relaxed">{children}</code>,
+                                            pre: ({ children }) => <>{children}</>,
+                                            blockquote: ({ children }) => <blockquote className="border-l-2 border-accent/40 pl-4 my-3 italic text-white/45">{children}</blockquote>,
+                                            hr: () => <hr className="border-none h-px bg-white/10 my-5" />,
+                                            table: ({ children }) => <div className="overflow-x-auto mb-3"><table className="w-full text-sm font-satoshi border-collapse">{children}</table></div>,
+                                            thead: ({ children }) => <thead className="border-b border-white/10">{children}</thead>,
+                                            th: ({ children }) => <th className="text-left py-2 px-3 text-white/70 font-semibold text-xs uppercase tracking-wide">{children}</th>,
+                                            td: ({ children }) => <td className="py-2 px-3 text-white/50 border-t border-white/[0.05]">{children}</td>,
+                                            img: ({ src, alt }) => <img src={src} alt={alt} className="max-w-full rounded-lg my-3" />,
+                                        }}
+                                    >
+                                        {content}
+                                    </ReactMarkdown>
+                                </div>
+                            )}
+
+                            {/* Raw view — monospace plain text */}
+                            {viewMode === 'raw' && (
+                                <pre className="p-5 text-sm font-mono text-white/70 whitespace-pre-wrap overflow-x-auto leading-relaxed max-h-[50vh] overflow-y-auto">
+                                    {content}
+                                </pre>
+                            )}
                         </div>
                     )}
                 </div>

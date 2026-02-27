@@ -385,10 +385,11 @@ export async function downloadSkillAsZip(repo, folderPath, skillName) {
 
     if (mdFiles.length === 0) throw new Error('No .md files found in this skill.')
 
-    // Fetch all .md file contents in parallel
+    // Fetch all .md file contents in parallel using path-based fetch
+    // (avoids null download_url which GitHub omits for large repos)
     const contents = await Promise.all(
         mdFiles.map(async (f) => {
-            const text = await fetchFileContent(f.download_url)
+            const text = await fetchFileContentByPath(repo, f.path)
             return { name: f.name, text }
         })
     )

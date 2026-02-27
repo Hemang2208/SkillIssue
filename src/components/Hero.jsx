@@ -82,14 +82,14 @@ export default function Hero() {
     }, [])
 
     return (
-        <section className="relative min-h-screen flex items-center pt-20 overflow-hidden">
+        <section className="relative lg:min-h-[100dvh] pt-32 pb-20 lg:pt-20 lg:pb-0 flex flex-col lg:flex-row lg:items-center overflow-hidden">
             {/* Background Orbs */}
             <div className="hero-orb w-[500px] h-[500px] bg-accent/10 top-[-10%] left-[-10%]" />
             <div className="hero-orb w-[400px] h-[400px] bg-accent/5 bottom-[5%] right-[-5%]" />
             <div className="hero-orb w-[300px] h-[300px] bg-blue-500/8 top-[40%] left-[50%]" />
 
             {/* Constellation */}
-            <div className="constellation-container">
+            <div className="constellation-container hidden opacity-30 lg:opacity-100 pointer-events-none">
                 <svg
                     ref={svgRef}
                     className="absolute inset-0 w-full h-full"
@@ -132,7 +132,7 @@ export default function Hero() {
             <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-8 w-full">
                 <div className="grid lg:grid-cols-2 gap-12 lg:gap-8 items-center">
                     {/* Left — Text */}
-                    <div className="space-y-8">
+                    <div className="space-y-8 flex flex-col items-center text-center lg:items-start lg:text-left z-10 relative">
                         <div className="space-y-2">
                             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-accent/20 bg-accent/5 mb-6">
                                 <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
@@ -154,25 +154,25 @@ export default function Hero() {
                         </p>
 
                         {/* Animated Stat */}
-                        <div className="py-3 pl-5 border-l-[3px] border-accent/40 flex flex-col justify-center animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                            <span className="font-satoshi text-[0.7rem] sm:text-xs font-bold tracking-[0.2em] uppercase text-white/50 mb-1">
+                        <div className="py-3 pl-5 border-l-[3px] border-accent/40 flex flex-col justify-center animate-fade-in-up items-center lg:items-start lg:border-l-[3px] lg:border-t-0 border-t-[3px] border-l-0 pt-5 lg:pt-3 lg:pl-5" style={{ animationDelay: '0.2s' }}>
+                            <span className="font-satoshi text-[0.7rem] sm:text-xs font-bold tracking-[0.2em] uppercase text-white/50 mb-1 lg:mb-1">
                                 Boost your AI productivity by up to
                             </span>
-                            <div className="font-clash font-black text-7xl sm:text-8xl text-accent leading-none tracking-tighter" style={{ textShadow: '0 0 40px rgba(75, 169, 255, 0.5)' }}>
+                            <div className="font-clash font-black text-6xl sm:text-7xl lg:text-8xl text-accent leading-none tracking-tighter" style={{ textShadow: '0 0 40px rgba(75, 169, 255, 0.5)' }}>
                                 <CountUpNumber />%
                             </div>
                         </div>
 
-                        <div className="flex flex-wrap gap-4">
-                            <a href="#browse" className="btn-primary">
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-4 justify-center lg:justify-start">
+                            <a href="#browse" className="btn-primary w-full sm:w-auto justify-center text-center">
+                                <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
                                 </svg>
                                 Browse Skills
                             </a>
-                            <a href="#get-started" className="btn-outline">
+                            <a href="#get-started" className="btn-outline w-full sm:w-auto justify-center text-center">
                                 Get Started Free
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
                                 </svg>
                             </a>

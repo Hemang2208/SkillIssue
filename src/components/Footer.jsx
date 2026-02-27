@@ -17,9 +17,11 @@ export default function Footer() {
                             Discover, save, share and combine
                             skills for every AI agent.
                         </p>
-                        {/* Ko-fi Button Placeholder */}
+                        {/* Ko-fi Button */}
                         <a
-                            href="#"
+                            href="https://ko-fi.com/abhishekbajpai"
+                            target="_blank"
+                            rel="noopener noreferrer"
                             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#FF5E5B]/10 border border-[#FF5E5B]/20 hover:bg-[#FF5E5B]/20 transition-all duration-300 group"
                         >
                             <svg className="w-4 h-4 text-[#FF5E5B]" viewBox="0 0 24 24" fill="currentColor">

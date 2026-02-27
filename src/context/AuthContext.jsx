@@ -10,7 +10,7 @@ const MOCK_USER = {
     email: 'dev@skillissue.local',
     user_metadata: {
         full_name: 'Dev User',
-        avatar_url: null,
+        avatar_url: 'https://i.pravatar.cc/150?u=devuser',
     },
 }
 
@@ -19,7 +19,7 @@ const MOCK_PROFILE = {
     username: 'devuser',
     email: 'dev@skillissue.local',
     display_name: 'Dev User',
-    avatar_url: null,
+    avatar_url: 'https://i.pravatar.cc/150?u=devuser',
     bio: 'Local development account — Supabase is offline.',
     created_at: new Date().toISOString(),
 }
