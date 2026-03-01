@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import Navbar from './components/Navbar'
 import Hero from './components/Hero'
+import { Testimonials } from './components/Testimonials'
 import WhatIsSkillFile from './components/WhatIsSkillFile'
 import HowItWorks from './components/HowItWorks'
 import Features from './components/Features'
@@ -13,11 +14,13 @@ import UserProfile from './pages/UserProfile'
 import AuthCallback from './pages/AuthCallback'
 import AuthModal from './components/AuthModal'
 import OnboardingModal from './components/OnboardingModal'
+import SkillDetailPage from './pages/SkillDetailPage'
 
 function LandingPage() {
     return (
         <>
             <Hero />
+            <Testimonials />
             <WhatIsSkillFile />
             <HowItWorks />
             <Features />
@@ -44,6 +47,7 @@ export default function App() {
                     <Route path="/browse" element={<BrowseSkills />} />
                     <Route path="/auth/callback" element={<AuthCallback />} />
                     <Route path="/user/:username" element={<UserProfile />} />
+                    <Route path="/skill/:id" element={<SkillDetailPage />} />
                 </Routes>
             </div>
 

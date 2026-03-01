@@ -10,6 +10,7 @@
     },
     "dependencies": {
         "@supabase/supabase-js": "^2.97.0",
+        "appwrite": "^22.4.1",
         "jszip": "^3.10.1",
         "lucide-react": "^0.575.0",
         "react": "^18.2.0",
@@ -22,6 +23,7 @@
     "devDependencies": {
         "@vitejs/plugin-react": "^4.2.1",
         "autoprefixer": "^10.4.17",
+        "node-appwrite": "^22.1.2",
         "postcss": "^8.4.35",
         "tailwindcss": "^3.4.1",
         "vite": "^5.1.4"

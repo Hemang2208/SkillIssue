@@ -69,7 +69,7 @@ export default function OnboardingModal() {
                 id: user.id,
                 username,
                 email: user.email,
-                avatar_url: user.user_metadata?.avatar_url ?? null,
+                avatar_url: user.avatar_url ?? user.user_metadata?.avatar_url ?? null,
             })
             await refreshProfile()
             setNeedsOnboarding(false)
@@ -96,10 +96,10 @@ export default function OnboardingModal() {
             <div className="w-full max-w-md">
 
                 {/* User preview */}
-                {user?.user_metadata?.avatar_url && (
+                {(user?.avatar_url || user?.user_metadata?.avatar_url) && (
                     <div className="flex justify-center mb-6">
                         <img
-                            src={user.user_metadata.avatar_url}
+                            src={user.avatar_url ?? user.user_metadata?.avatar_url}
                             alt="Your avatar"
                             className="w-16 h-16 rounded-full border-2 border-accent/30 ring-4 ring-accent/10"
                         />
@@ -135,9 +135,9 @@ export default function OnboardingModal() {
                                     maxLength={30}
                                     autoFocus
                                     className={`w-full pl-8 pr-4 py-3.5 rounded-xl bg-white/[0.04] border font-satoshi text-base text-white placeholder:text-white/15 outline-none transition-all duration-200 ${status === 'available' ? 'border-emerald-500/40 bg-emerald-500/[0.03]' :
-                                            status === 'taken' ? 'border-red-400/40 bg-red-500/[0.03]' :
-                                                status === 'invalid' ? 'border-orange-400/30' :
-                                                    'border-white/[0.08] focus:border-accent/40'
+                                        status === 'taken' ? 'border-red-400/40 bg-red-500/[0.03]' :
+                                            status === 'invalid' ? 'border-orange-400/30' :
+                                                'border-white/[0.08] focus:border-accent/40'
                                         }`}
                                 />
                             </div>
@@ -163,8 +163,8 @@ export default function OnboardingModal() {
                             type="submit"
                             disabled={!canSubmit}
                             className={`w-full py-3.5 rounded-xl font-satoshi font-bold text-base transition-all duration-300 ${canSubmit
-                                    ? 'bg-accent text-navy hover:bg-[#6bbcff] hover:shadow-[0_0_30px_rgba(75,169,255,0.25)] hover:-translate-y-0.5'
-                                    : 'bg-white/5 text-white/20 cursor-not-allowed'
+                                ? 'bg-accent text-navy hover:bg-[#6bbcff] hover:shadow-[0_0_30px_rgba(75,169,255,0.25)] hover:-translate-y-0.5'
+                                : 'bg-white/5 text-white/20 cursor-not-allowed'
                                 }`}
                         >
                             {submitting ? 'Setting up your profile…' : 'Claim Username →'}

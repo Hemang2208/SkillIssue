@@ -28,6 +28,8 @@ export default {
             },
             animation: {
                 'float': 'float 6s ease-in-out infinite',
+                'marquee': 'marquee var(--duration, 40s) linear infinite',
+                'marquee-vertical': 'marquee-vertical var(--duration, 40s) linear infinite',
                 'float-slow': 'float 8s ease-in-out infinite',
                 'float-slower': 'float 10s ease-in-out infinite',
                 'pulse-glow': 'pulse-glow 3s ease-in-out infinite',
@@ -35,6 +37,14 @@ export default {
                 'drift': 'drift 20s linear infinite',
             },
             keyframes: {
+                marquee: {
+                    from: { transform: 'translateX(0)' },
+                    to: { transform: 'translateX(calc(-100% - var(--gap, 1rem)))' },
+                },
+                'marquee-vertical': {
+                    from: { transform: 'translateY(0)' },
+                    to: { transform: 'translateY(calc(-100% - var(--gap, 1rem)))' },
+                },
                 float: {
                     '0%, 100%': { transform: 'translateY(0px)' },
                     '50%': { transform: 'translateY(-20px)' },

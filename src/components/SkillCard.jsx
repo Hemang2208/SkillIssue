@@ -1,19 +1,41 @@
+import { useState } from 'react'
+import ConfirmDialog from './ConfirmDialog'
+
 // Reusable skill card for profile pages and explore feeds
-export default function SkillCard({ skill, onCopy, isPrivate = false, index = 0 }) {
+export default function SkillCard({ skill, onCopy, onClick, onDelete, onMakePrivate, isPrivate = false, isOwner = false, index = 0 }) {
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+    const [deleting, setDeleting] = useState(false)
+    const [linkCopied, setLinkCopied] = useState(false)
+
     const {
         id, title, description, category, tags = [],
-        star_count = 0, copy_count = 0, created_at,
+        star_count = 0, copy_count = 0, $createdAt, created_at,
     } = skill
 
     const ago = (() => {
-        const diff = Date.now() - new Date(created_at).getTime()
+        const dateStr = $createdAt || created_at
+        if (!dateStr) return 'unknown'
+        const diff = Date.now() - new Date(dateStr).getTime()
         const d = Math.floor(diff / 86400000)
+        if (Number.isNaN(d) || d < 0) return 'unknown'
         if (d < 1) return 'today'
         if (d === 1) return 'yesterday'
         if (d < 30) return `${d}d ago`
         if (d < 365) return `${Math.floor(d / 30)}mo ago`
         return `${Math.floor(d / 365)}y ago`
     })()
+
+    async function handleShare(e) {
+        e.stopPropagation()
+        const url = `${import.meta.env.VITE_SITE_URL || 'https://skillissue.bajpai.tech'}/skill/${id}`
+        if (navigator.share) {
+            try { await navigator.share({ title, url }) } catch { /* cancelled */ }
+        } else {
+            await navigator.clipboard.writeText(url)
+            setLinkCopied(true)
+            setTimeout(() => setLinkCopied(false), 2000)
+        }
+    }
 
     const categoryColors = {
         coding: {
@@ -45,8 +67,9 @@ export default function SkillCard({ skill, onCopy, isPrivate = false, index = 0 
 
     return (
         <div
-            className={`skill-card-enter group relative bg-gradient-to-b from-navy-50 to-navy border border-white/[0.06] rounded-2xl p-5 hover:border-accent/25 transition-all duration-400 hover:-translate-y-1 flex flex-col gap-4 ${cat.glow}`}
+            className={`skill-card-enter group relative bg-gradient-to-b from-navy-50 to-navy border border-white/[0.06] rounded-2xl p-5 hover:border-accent/25 transition-all duration-400 hover:-translate-y-1 flex flex-col gap-4 ${cat.glow} ${onClick ? 'cursor-pointer' : ''}`}
             style={{ animationDelay: `${index * 80}ms` }}
+            onClick={() => onClick?.(skill)}
         >
             {/* Subtle top edge highlight */}
             <div className="absolute top-0 left-6 right-6 h-[1px] bg-gradient-to-r from-transparent via-accent/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
@@ -80,7 +103,7 @@ export default function SkillCard({ skill, onCopy, isPrivate = false, index = 0 
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between pt-3 border-t border-white/[0.04]">
+            <div className="flex items-center justify-between pt-3 border-t border-white/[0.04]" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center gap-3">
                     {/* Stars */}
                     <span className="flex items-center gap-1.5 font-satoshi text-xs text-white/30 group-hover:text-white/40 transition-colors">
@@ -101,19 +124,84 @@ export default function SkillCard({ skill, onCopy, isPrivate = false, index = 0 
                     <span className="font-satoshi text-xs text-white/20">{ago}</span>
                 </div>
 
-                {onCopy && !isPrivate && (
+                {/* Action buttons */}
+                <div className="flex items-center gap-1.5">
+                    {/* Copy to clipboard (non-owner public) */}
+                    {onCopy && !isPrivate && !isOwner && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onCopy(skill); }}
+                            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-accent/[0.06] border border-accent/15 text-accent/80 font-satoshi text-xs font-semibold hover:bg-accent/15 hover:border-accent/30 hover:text-accent hover:shadow-[0_0_12px_rgba(75,169,255,0.12)] transition-all duration-300"
+                        >
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h7.5a1.125 1.125 0 011.125 1.125v7.5" />
+                            </svg>
+                            Copy
+                        </button>
+                    )}
+
+                    {/* Owner: Make private (only on public cards) */}
+                    {isOwner && onMakePrivate && !isPrivate && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onMakePrivate(skill.id); }}
+                            title="Make private"
+                            className="w-7 h-7 flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.02] text-white/25 hover:text-amber-400/70 hover:border-amber-500/20 hover:bg-amber-500/[0.05] transition-all duration-300"
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                            </svg>
+                        </button>
+                    )}
+
+                    {/* Share Button */}
                     <button
-                        onClick={() => onCopy(skill)}
-                        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-accent/[0.06] border border-accent/15 text-accent/80 font-satoshi text-xs font-semibold hover:bg-accent/15 hover:border-accent/30 hover:text-accent hover:shadow-[0_0_12px_rgba(75,169,255,0.12)] transition-all duration-300"
+                        onClick={handleShare}
+                        title={linkCopied ? "Link copied!" : "Share skill"}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.02] text-white/25 hover:text-accent/80 hover:border-accent/30 hover:bg-accent/[0.05] transition-all duration-300"
                     >
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h7.5a1.125 1.125 0 011.125 1.125v7.5" />
-                        </svg>
-                        Copy
+                        {linkCopied ? (
+                            <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                        ) : (
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" /></svg>
+                        )}
                     </button>
-                )}
+
+                    {/* Owner: Delete */}
+                    {isOwner && onDelete && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
+                            title="Delete skill"
+                            className="w-7 h-7 flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.02] text-white/25 hover:text-red-400/70 hover:border-red-500/20 hover:bg-red-500/[0.05] transition-all duration-300"
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                            </svg>
+                        </button>
+                    )}
+                </div>
             </div>
+
+            {/* Delete confirmation dialog */}
+            {showDeleteConfirm && (
+                <ConfirmDialog
+                    title="Delete Skill"
+                    message={
+                        <>
+                            <span className="text-white/70 font-semibold">"{skill.title}"</span>
+                            {' '}will be permanently deleted.{' '}
+                            This action cannot be undone.
+                        </>
+                    }
+                    confirmLabel="Delete"
+                    working={deleting}
+                    onConfirm={async () => {
+                        setDeleting(true)
+                        try { await onDelete(skill.id) }
+                        finally { setDeleting(false); setShowDeleteConfirm(false) }
+                    }}
+                    onCancel={() => setShowDeleteConfirm(false)}
+                />
+            )}
         </div>
     )
 }

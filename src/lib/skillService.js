@@ -1,101 +1,208 @@
-import { supabase, isSupabaseConfigured } from './supabase'
+import { databases, isAppwriteConfigured, ID, Query, Permission, Role, DATABASE_ID, SKILLS_TABLE_ID } from './appwrite'
+import { account } from './appwrite'
 
-function requireSupabase() {
-    if (!isSupabaseConfigured || !supabase) {
-        throw new Error('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file.')
+function requireAppwrite() {
+    if (!isAppwriteConfigured || !databases) {
+        throw new Error('Appwrite is not configured. Add VITE_APPWRITE_ENDPOINT and VITE_APPWRITE_PROJECT_ID to your .env file.')
     }
 }
 
-/** Save a generated skill to Supabase. */
+/** Normalise Appwrite $id → id so page components stay unchanged. */
+function normalise(doc) {
+    if (!doc) return null
+    return { ...doc, id: doc.$id }
+}
+
+/** Save a generated skill to Appwrite. */
 export async function saveSkill({ title, content, tags = [], visibility = 'private', description = '', category = '' }) {
-    requireSupabase()
-    const { data: { user } } = await supabase.auth.getUser()
+    requireAppwrite()
+    const user = await account.get()
     if (!user) throw new Error('You must be signed in to save a skill.')
 
-    const { data, error } = await supabase
-        .from('skills')
-        .insert([{ user_id: user.id, title, content, tags, visibility, description, category }])
-        .select()
-        .single()
+    // ── Duplicate title check (per user) ────────────────────────
+    const existing = await databases.listDocuments(
+        DATABASE_ID,
+        SKILLS_TABLE_ID,
+        [
+            Query.equal('user_id', user.$id),
+            Query.equal('title', title),
+            Query.limit(1),
+        ]
+    )
+    if (existing.total > 0) {
+        throw new Error(`You already have a skill named "${title}". Please rename it or update the existing one.`)
+    }
 
-    if (error) throw error
-    return data
+    // ── Check if first skill ──────────────────────────────────
+    const allUserSkills = await databases.listDocuments(
+        DATABASE_ID,
+        SKILLS_TABLE_ID,
+        [
+            Query.equal('user_id', user.$id),
+            Query.limit(1),
+        ]
+    )
+    const isFirstSkill = allUserSkills.total === 0
+
+    const perms = [
+        Permission.read(Role.any()),
+        Permission.update(Role.user(user.$id)),
+        Permission.delete(Role.user(user.$id)),
+    ]
+
+    const data = await databases.createDocument(
+        DATABASE_ID,
+        SKILLS_TABLE_ID,
+        ID.unique(),
+        { user_id: user.$id, title, content, tags, visibility, description, category, copy_count: 0, download_count: 0, star_count: 0 },
+        perms
+    )
+    return { ...normalise(data), isFirstSkill }
 }
+
 
 /** Fetch all skills belonging to the currently signed-in user. */
 export async function getUserSkills() {
-    requireSupabase()
-    const { data, error } = await supabase
-        .from('skills')
-        .select('*')
-        .order('created_at', { ascending: false })
-    if (error) throw error
-    return data
+    requireAppwrite()
+    const user = await account.get()
+    if (!user) return []
+
+    const res = await databases.listDocuments(
+        DATABASE_ID,
+        SKILLS_TABLE_ID,
+        [
+            Query.equal('user_id', user.$id),
+            Query.orderDesc('$createdAt'),
+            Query.limit(100),
+        ]
+    )
+    return res.documents.map(normalise)
 }
 
 /** Fetch all PUBLIC skills for a given user, with optional sort. */
 export async function getPublicSkillsByUser(userId, sort = 'recent') {
-    requireSupabase()
-    const sortMap = {
-        'recent': { column: 'created_at', ascending: false },
-        'most-rated': { column: 'star_count', ascending: false },
-        'most-copied': { column: 'copy_count', ascending: false },
-    }
-    const { column, ascending } = sortMap[sort] ?? sortMap['recent']
+    requireAppwrite()
+    const sortQuery = {
+        'recent': Query.orderDesc('$createdAt'),
+        'most-rated': Query.orderDesc('star_count'),
+        'most-copied': Query.orderDesc('copy_count'),
+    }[sort] ?? Query.orderDesc('$createdAt')
 
-    const { data, error } = await supabase
-        .from('skills')
-        .select('id, title, description, category, tags, star_count, copy_count, download_count, created_at, visibility')
-        .eq('user_id', userId)
-        .eq('visibility', 'public')
-        .order(column, { ascending })
-
-    if (error) throw error
-    return data || []
+    const res = await databases.listDocuments(
+        DATABASE_ID,
+        SKILLS_TABLE_ID,
+        [
+            Query.equal('user_id', userId),
+            Query.equal('visibility', 'public'),
+            sortQuery,
+            Query.limit(100),
+        ]
+    )
+    return res.documents.map(normalise)
 }
 
 /** Fetch all PRIVATE skills for the owner of a profile. */
 export async function getPrivateSkillsByUser(userId) {
-    requireSupabase()
-    const { data, error } = await supabase
-        .from('skills')
-        .select('id, title, description, category, tags, created_at, visibility')
-        .eq('user_id', userId)
-        .eq('visibility', 'private')
-        .order('created_at', { ascending: false })
-    if (error) throw error
-    return data || []
+    requireAppwrite()
+    const res = await databases.listDocuments(
+        DATABASE_ID,
+        SKILLS_TABLE_ID,
+        [
+            Query.equal('user_id', userId),
+            Query.equal('visibility', 'private'),
+            Query.orderDesc('$createdAt'),
+            Query.limit(100),
+        ]
+    )
+    return res.documents.map(normalise)
 }
 
-/** Toggle a skill between public and private. */
+/** Toggle a skill between public and private (also updates document permissions). */
 export async function toggleVisibility(skillId, newVisibility) {
-    requireSupabase()
-    const { data, error } = await supabase
-        .from('skills')
-        .update({ visibility: newVisibility })
-        .eq('id', skillId)
-        .select()
-        .single()
-    if (error) throw error
-    return data
+    requireAppwrite()
+    const user = await account.get()
+    if (!user) throw new Error('Not authenticated.')
+
+    const perms = [
+        Permission.read(Role.any()),
+        Permission.update(Role.user(user.$id)),
+        Permission.delete(Role.user(user.$id)),
+    ]
+
+    const data = await databases.updateDocument(
+        DATABASE_ID,
+        SKILLS_TABLE_ID,
+        skillId,
+        { visibility: newVisibility },
+        perms
+    )
+    return normalise(data)
 }
 
 /** Delete a skill by id. */
 export async function deleteSkill(id) {
-    requireSupabase()
-    const { error } = await supabase.from('skills').delete().eq('id', id)
-    if (error) throw error
+    requireAppwrite()
+    await databases.deleteDocument(DATABASE_ID, SKILLS_TABLE_ID, id)
 }
 
 /** Update an existing skill. */
 export async function updateSkill(id, { title, content, tags }) {
-    requireSupabase()
-    const { data, error } = await supabase
-        .from('skills')
-        .update({ title, content, tags, updated_at: new Date().toISOString() })
-        .eq('id', id)
-        .select()
-        .single()
-    if (error) throw error
-    return data
+    requireAppwrite()
+    const data = await databases.updateDocument(
+        DATABASE_ID,
+        SKILLS_TABLE_ID,
+        id,
+        { title, content, tags }
+    )
+    return normalise(data)
+}
+
+/** Fetch a single skill by its Appwrite document ID.
+ *  Public skills are readable by anyone.
+ *  Private skills will throw a 401/403 from Appwrite if not the owner. */
+export async function getSkillById(id) {
+    requireAppwrite()
+    const data = await databases.getDocument(DATABASE_ID, SKILLS_TABLE_ID, id)
+    return normalise(data)
+}
+
+/** Fetch profile stats for a user. */
+export async function getProfileStats(userId) {
+    requireAppwrite()
+    const res = await databases.listDocuments(
+        DATABASE_ID,
+        SKILLS_TABLE_ID,
+        [Query.equal('user_id', userId), Query.limit(100)]
+    )
+    const docs = res.documents
+    return {
+        total_skills: res.total,
+        total_copies: docs.reduce((s, d) => s + (d.copy_count ?? 0), 0),
+        total_downloads: docs.reduce((s, d) => s + (d.download_count ?? 0), 0),
+        total_stars: docs.reduce((s, d) => s + (d.star_count ?? 0), 0),
+    }
+}
+
+/** Increment star_count. Call after verifying the user hasn't already starred. */
+export async function starSkill(skillId, currentCount) {
+    requireAppwrite()
+    const data = await databases.updateDocument(
+        DATABASE_ID,
+        SKILLS_TABLE_ID,
+        skillId,
+        { star_count: (currentCount ?? 0) + 1 }
+    )
+    return normalise(data)
+}
+
+/** Decrement star_count (floor 0). */
+export async function unstarSkill(skillId, currentCount) {
+    requireAppwrite()
+    const data = await databases.updateDocument(
+        DATABASE_ID,
+        SKILLS_TABLE_ID,
+        skillId,
+        { star_count: Math.max(0, (currentCount ?? 1) - 1) }
+    )
+    return normalise(data)
 }

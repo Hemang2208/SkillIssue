@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { account } from '../lib/appwrite'
 
 export default function AuthCallback() {
     const navigate = useNavigate()
@@ -13,30 +13,55 @@ export default function AuthCallback() {
 
         async function handleCallback() {
             const params = new URLSearchParams(window.location.search)
-            const code = params.get('code')
-            const error = params.get('error')
-            const errorDescription = params.get('error_description')
 
             // OAuth error from provider
+            const error = params.get('error')
+            const errorDescription = params.get('error_description')
             if (error) {
                 console.error('OAuth error:', error, errorDescription)
                 navigate('/?auth_error=' + encodeURIComponent(errorDescription || error), { replace: true })
                 return
             }
 
-            // PKCE flow — exchange code for session
-            if (code) {
+            // Appwrite OAuth / Magic Link callback delivers userId + secret
+            const userId = params.get('userId')
+            const secret = params.get('secret')
+
+            if (userId && secret) {
                 try {
-                    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
-                    if (exchangeError) throw exchangeError
+                    await account.createSession({ userId, secret })
+
+                    // ── After OAuth session is created, grab the real Google ──
+                    // profile picture via the provider access token and save it
+                    // to account prefs so enrichUser() can read it later.
+                    try {
+                        const identities = await account.listIdentities()
+                        const googleIdentity = identities.identities?.find(i => i.provider === 'google')
+                        if (googleIdentity?.providerAccessToken) {
+                            const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                                headers: { Authorization: `Bearer ${googleIdentity.providerAccessToken}` },
+                            })
+                            if (res.ok) {
+                                const info = await res.json()
+                                if (info.picture) {
+                                    const current = await account.getPrefs()
+                                    await account.updatePrefs({ ...current, avatar_url: info.picture })
+                                }
+                            }
+                        }
+                    } catch (prefErr) {
+                        // Non-fatal — avatar will fall back to initials
+                        console.warn('Could not fetch Google avatar:', prefErr)
+                    }
+
                 } catch (err) {
-                    console.error('Code exchange failed:', err)
+                    console.error('Session creation failed:', err)
                     navigate('/?auth_error=' + encodeURIComponent(err.message), { replace: true })
                     return
                 }
             }
 
-            // On success, redirect home — onAuthStateChange in AuthContext
+            // On success navigate home — account subscription in AuthContext
             // will pick up the new session automatically
             navigate('/', { replace: true })
         }

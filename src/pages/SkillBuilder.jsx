@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useAuth } from '../context/AuthContext'
 import { saveSkill } from '../lib/skillService'
+import { submitTestimonial } from '../lib/userService'
 import TextareaAutosize from 'react-textarea-autosize'
 
 // ── Google icon SVG (reusable) ──────────────────────
@@ -141,11 +142,102 @@ function Toast({ message, onClose }) {
     )
 }
 
+// ── Testimonial Modal ──────────────────────────────
+function TestimonialModal({ onClose, authUser }) {
+    const [body, setBody] = useState('')
+    const [submitting, setSubmitting] = useState(false)
+    const [submitted, setSubmitted] = useState(false)
+
+    async function handleSubmit() {
+        if (!body.trim()) return
+        setSubmitting(true)
+        try {
+            await submitTestimonial({
+                name: authUser.user_metadata?.full_name || authUser.name || 'Anonymous',
+                username: authUser.name ? authUser.name.replace(/\s+/g, '').toLowerCase() : 'user',
+                body: body.trim(),
+                img: authUser.avatar_url || 'https://avatar.vercel.sh/user'
+            })
+            setSubmitted(true)
+            setTimeout(onClose, 2000)
+        } catch (err) {
+            console.error(err)
+            // Still close it if it fails so they aren't blocked, but in a real app show an error
+            onClose()
+        }
+    }
+
+    if (submitted) {
+        return (
+            <div className="modal-overlay z-[100]" onClick={onClose}>
+                <div className="modal-card text-center relative" onClick={e => e.stopPropagation()}>
+                    <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-8 h-8 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                    </div>
+                    <h3 className="font-clash font-bold text-2xl mb-2 text-white/90">Thank you!</h3>
+                    <p className="font-satoshi text-sm text-white/50">Your testimonial has been submitted.</p>
+                </div>
+            </div>
+        )
+    }
+
+    return (
+        <div className="modal-overlay z-[100]" onClick={onClose}>
+            <div className="modal-card relative" onClick={e => e.stopPropagation()}>
+                <button
+                    onClick={onClose}
+                    className="absolute top-4 right-4 text-white/30 hover:text-white/60 transition-colors"
+                >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+
+                <div className="text-center mb-6">
+                    <span className="inline-block px-3 py-1 rounded-full bg-accent/10 border border-accent/20 text-accent font-satoshi text-xs font-semibold mb-3">
+                        Achievement Unlocked ✨
+                    </span>
+                    <h3 className="font-clash font-bold text-2xl mb-2 text-white/90">First Skill Built!</h3>
+                    <p className="font-satoshi text-sm text-white/50">
+                        You just built your first skill! What do you think of Skill Issue so far? Leave a review for a chance to be featured on the homepage.
+                    </p>
+                </div>
+
+                <textarea
+                    value={body}
+                    onChange={(e) => setBody(e.target.value)}
+                    placeholder="This app is basically magic. I built a coding assistant in 3 seconds..."
+                    rows={4}
+                    className="w-full px-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.08] focus:border-accent/40 focus:bg-white/[0.05] text-white placeholder:text-white/20 font-satoshi text-sm outline-none transition-all duration-300 resize-none mb-4"
+                />
+
+                <div className="flex gap-3">
+                    <button
+                        onClick={onClose}
+                        className="flex-1 px-4 py-2.5 rounded-xl font-satoshi font-semibold text-sm bg-white/5 hover:bg-white/10 text-white/70 transition-colors"
+                    >
+                        Skip for now
+                    </button>
+                    <button
+                        onClick={handleSubmit}
+                        disabled={submitting || !body.trim()}
+                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-satoshi font-semibold text-sm transition-all duration-300 ${body.trim() && !submitting ? 'bg-accent text-navy hover:bg-[#6bbcff] cursor-pointer' : 'bg-white/5 text-white/20 cursor-not-allowed'}`}
+                    >
+                        {submitting ? 'Submitting...' : 'Submit Review'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 // ═══════════════════════════════════════════════════════
 //  MAIN PAGE COMPONENT
 // ═══════════════════════════════════════════════════════
 export default function SkillBuilder() {
-    const { isLoggedIn, openAuthModal } = useAuth()
+    const { isLoggedIn, openAuthModal, authUser } = useAuth()
 
     // Form state
     const [skillName, setSkillName] = useState('')
@@ -165,9 +257,11 @@ export default function SkillBuilder() {
     const [pendingGenerate, setPendingGenerate] = useState(false)
     const [copied, setCopied] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
+    const [savedAs, setSavedAs] = useState(null) // null | 'public' | 'private'
     const [refinementInstruction, setRefinementInstruction] = useState('')
     const [isRefining, setIsRefining] = useState(false)
     const [viewMode, setViewMode] = useState('rendered') // 'rendered' | 'raw'
+    const [showTestimonialModal, setShowTestimonialModal] = useState(false)
 
     const outputRef = useRef(null)
     const fileInputRef = useRef(null)
@@ -240,7 +334,8 @@ export default function SkillBuilder() {
             setGeneratedMarkdown(data.markdown)
             setIsGenerating(false)
             setShowOutput(true)
-            setViewMode('rendered') // reset view on each new generation
+            setSavedAs(null)   // reset saved state for each new generation
+            setViewMode('rendered')
 
             // Scroll to output
             setTimeout(() => {
@@ -320,16 +415,21 @@ export default function SkillBuilder() {
         setShowSaveModal(false)
         setIsSaving(true)
         try {
-            await saveSkill({
+            const result = await saveSkill({
                 title: skillName.trim(),
                 content: generatedMarkdown,
                 tags: [],
-                visibility, // 'public' | 'private'
+                visibility,
             })
+            setSavedAs(visibility)
             setToast(`Skill saved as ${visibility}! ✓`)
+
+            if (result.isFirstSkill) {
+                setShowTestimonialModal(true)
+            }
         } catch (err) {
             console.error('Save error:', err)
-            setToast(`Failed to save: ${err.message}`)
+            setToast(err.message || 'Failed to save.')
         } finally {
             setIsSaving(false)
         }
@@ -680,22 +780,32 @@ export default function SkillBuilder() {
                                     </button>
 
                                     <button
-                                        onClick={() => setShowSaveModal(true)}
-                                        disabled={isSaving}
-                                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent/10 border border-accent/20 transition-all duration-300 group ${isSaving ? 'opacity-50 cursor-wait' : 'hover:bg-accent/20 hover:border-accent/40'}`}
+                                        onClick={() => savedAs ? null : setShowSaveModal(true)}
+                                        disabled={isSaving || !!savedAs}
+                                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl border transition-all duration-300 group ${savedAs
+                                            ? 'bg-emerald-500/10 border-emerald-500/30 cursor-default'
+                                            : isSaving
+                                                ? 'bg-accent/10 border-accent/20 opacity-50 cursor-wait'
+                                                : 'bg-accent/10 border-accent/20 hover:bg-accent/20 hover:border-accent/40'
+                                            }`}
                                     >
                                         {isSaving ? (
                                             <svg className="w-4 h-4 text-accent animate-spin" fill="none" viewBox="0 0 24 24">
                                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
                                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                                             </svg>
+                                        ) : savedAs ? (
+                                            <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                            </svg>
                                         ) : (
                                             <svg className="w-4 h-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
                                             </svg>
                                         )}
-                                        <span className="font-satoshi text-sm font-medium text-accent">
-                                            {isSaving ? 'Saving…' : 'Save to Profile'}
+                                        <span className={`font-satoshi text-sm font-medium ${savedAs ? 'text-emerald-400' : 'text-accent'
+                                            }`}>
+                                            {isSaving ? 'Saving…' : savedAs ? `Saved as ${savedAs} ✓` : 'Save to Profile'}
                                         </span>
                                     </button>
                                 </div>
@@ -727,6 +837,13 @@ export default function SkillBuilder() {
                     />
                 )
             }
+
+            {showTestimonialModal && (
+                <TestimonialModal
+                    onClose={() => setShowTestimonialModal(false)}
+                    authUser={authUser}
+                />
+            )}
         </div >
     )
 }

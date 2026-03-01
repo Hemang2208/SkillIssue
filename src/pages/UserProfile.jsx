@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { Package, Copy, Download, Star, UserX, Sprout } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { getProfileByUsername, getProfileStats } from '../lib/userService'
-import { getPublicSkillsByUser, getPrivateSkillsByUser, toggleVisibility } from '../lib/skillService'
+import { getProfileByUsername, getProfileStats, getSavedSkills, submitTestimonial, hasSubmittedTestimonial } from '../lib/userService'
+import { getPublicSkillsByUser, getPrivateSkillsByUser, toggleVisibility, deleteSkill } from '../lib/skillService'
 import SkillCard from '../components/SkillCard'
 import EditProfileModal from '../components/EditProfileModal'
+import UserSkillModal from '../components/UserSkillModal'
 
 // ── Animated counter ───────────────────────────────────────
 function AnimatedNumber({ value, duration = 1200 }) {
@@ -74,6 +75,94 @@ function SkeletonCard() {
     )
 }
 
+// ── Review Modal ─────────────────────────────────────────────
+function ReviewModal({ onClose, authUser, onSubmitted }) {
+    const [body, setBody] = useState('')
+    const [submitting, setSubmitting] = useState(false)
+    const [submitted, setSubmitted] = useState(false)
+
+    async function handleSubmit() {
+        if (!body.trim()) return
+        setSubmitting(true)
+        try {
+            await submitTestimonial({
+                name: authUser.user_metadata?.full_name || authUser.name || 'Anonymous',
+                username: authUser.name ? authUser.name.replace(/\s+/g, '').toLowerCase() : 'user',
+                body: body.trim(),
+                img: authUser.avatar_url || 'https://avatar.vercel.sh/user'
+            })
+            setSubmitted(true)
+            onSubmitted()
+            setTimeout(onClose, 2000)
+        } catch (err) {
+            console.error(err)
+            onClose()
+        }
+    }
+
+    if (submitted) {
+        return (
+            <div className="modal-overlay z-[100]" onClick={onClose}>
+                <div className="modal-card text-center relative" onClick={e => e.stopPropagation()}>
+                    <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-8 h-8 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                    </div>
+                    <h3 className="font-clash font-bold text-2xl mb-2 text-white/90">Thank you!</h3>
+                    <p className="font-satoshi text-sm text-white/50">Your testimonial has been submitted.</p>
+                </div>
+            </div>
+        )
+    }
+
+    return (
+        <div className="modal-overlay z-[100]" onClick={onClose}>
+            <div className="modal-card relative" onClick={e => e.stopPropagation()}>
+                <button
+                    onClick={onClose}
+                    className="absolute top-4 right-4 text-white/30 hover:text-white/60 transition-colors"
+                >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+
+                <div className="text-center mb-6">
+                    <h3 className="font-clash font-bold text-2xl mb-2 text-white/90">Leave a Review</h3>
+                    <p className="font-satoshi text-sm text-white/50">
+                        What do you think of Skill Issue so far? Leave a review for a chance to be featured on the homepage.
+                    </p>
+                </div>
+
+                <textarea
+                    value={body}
+                    onChange={(e) => setBody(e.target.value)}
+                    placeholder="This app is basically magic. I built a coding assistant in 3 seconds..."
+                    rows={4}
+                    className="w-full px-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.08] focus:border-accent/40 focus:bg-white/[0.05] text-white placeholder:text-white/20 font-satoshi text-sm outline-none transition-all duration-300 resize-none mb-4"
+                />
+
+                <div className="flex gap-3">
+                    <button
+                        onClick={onClose}
+                        className="flex-1 px-4 py-2.5 rounded-xl font-satoshi font-semibold text-sm bg-white/5 hover:bg-white/10 text-white/70 transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onClick={handleSubmit}
+                        disabled={submitting || !body.trim()}
+                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-satoshi font-semibold text-sm transition-all duration-300 ${body.trim() && !submitting ? 'bg-accent text-navy hover:bg-[#6bbcff] cursor-pointer' : 'bg-white/5 text-white/20 cursor-not-allowed'}`}
+                    >
+                        {submitting ? 'Submitting...' : 'Submit Review'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 // ════════════════════════════════════════════════════════════
 //  MAIN PAGE
 // ════════════════════════════════════════════════════════════
@@ -87,10 +176,14 @@ export default function UserProfile() {
     const [stats, setStats] = useState(null)
     const [publicSkills, setPublic] = useState([])
     const [privateSkills, setPrivate] = useState([])
+    const [savedSkills, setSavedSkills] = useState([])
     const [filter, setFilter] = useState('recent')
+    const [selectedSkill, setSelectedSkill] = useState(null)
     const [loading, setLoading] = useState(true)
     const [notFound, setNotFound] = useState(false)
     const [showEdit, setShowEdit] = useState(false)
+    const [showReviewModal, setShowReviewModal] = useState(false)
+    const [hasReviewed, setHasReviewed] = useState(false)
 
     const isOwner = authProfile?.username === username
 
@@ -113,6 +206,9 @@ export default function UserProfile() {
                         setPrivate([
                             { id: 'mock-priv-1', title: 'Secret Project Helper', category: 'coding', tags: [], created_at: new Date().toISOString() },
                         ])
+                        setSavedSkills([
+                            { id: 'mock-saved-1', title: 'Awesome CSS Tricks', description: 'Some cool CSS tricks I found', category: 'design', tags: ['css'], star_count: 5, copy_count: 10, created_at: new Date().toISOString(), user_id: 'other-user' }
+                        ])
                     } else {
                         setNotFound(true)
                     }
@@ -125,16 +221,26 @@ export default function UserProfile() {
                 if (!p) { setNotFound(true); setLoading(false); return }
                 setProfile(p)
 
-                const [s, pub] = await Promise.all([
-                    getProfileStats(p.id),
-                    getPublicSkillsByUser(p.id, filter),
+                const [s, pub, reviewedStatus] = await Promise.all([
+                    getProfileStats(p.user_id),
+                    getPublicSkillsByUser(p.user_id, filter),
+                    hasSubmittedTestimonial(p.user_id)
                 ])
                 setStats(s)
                 setPublic(pub)
+                setHasReviewed(reviewedStatus)
 
                 if (isOwner) {
-                    const priv = await getPrivateSkillsByUser(p.id)
+                    const [priv, saved] = await Promise.all([
+                        getPrivateSkillsByUser(p.user_id),
+                        getSavedSkills(p.id)
+                    ])
                     setPrivate(priv)
+                    setSavedSkills(saved)
+                } else if (!isMockMode) {
+                    // Show saved skills if they exist on the profile (if they are public? Wait, we can always show them or only to owner)
+                    const saved = await getSavedSkills(p.id)
+                    setSavedSkills(saved)
                 }
             } catch (err) {
                 console.error('Profile load error:', err)
@@ -148,17 +254,46 @@ export default function UserProfile() {
     // ── Re-fetch public skills when filter changes ────────────
     useEffect(() => {
         if (!profile) return
-        getPublicSkillsByUser(profile.id, filter).then(setPublic)
+        getPublicSkillsByUser(profile.user_id, filter).then(setPublic)
     }, [filter, profile])
 
     // ── Make private skill public ─────────────────────────────
     async function handleMakePublic(skillId) {
         await toggleVisibility(skillId, 'public')
         setPrivate(prev => prev.filter(s => s.id !== skillId))
-        // Re-fetch public list
-        const pub = await getPublicSkillsByUser(profile.id, filter)
+        const pub = await getPublicSkillsByUser(profile.user_id, filter)
         setPublic(pub)
-        const s = await getProfileStats(profile.id)
+        const s = await getProfileStats(profile.user_id)
+        setStats(s)
+    }
+
+    async function handleMakePrivate(skillId) {
+        await toggleVisibility(skillId, 'private')
+        setPublic(prev => prev.filter(s => s.id !== skillId))
+        const priv = await getPrivateSkillsByUser(profile.user_id)
+        setPrivate(priv)
+        const s = await getProfileStats(profile.user_id)
+        setStats(s)
+    }
+
+    async function handleDelete(skillId) {
+        await deleteSkill(skillId)
+        setPublic(prev => prev.filter(s => s.id !== skillId))
+        setPrivate(prev => prev.filter(s => s.id !== skillId))
+        const s = await getProfileStats(profile.user_id)
+        setStats(s)
+    }
+
+    // ── Handle modal skill actions (toggle/delete from modal) ──
+    async function handleModalToggle(skillId, newVisibility) {
+        await toggleVisibility(skillId, newVisibility)
+        const [pub, priv] = await Promise.all([
+            getPublicSkillsByUser(profile.user_id, filter),
+            getPrivateSkillsByUser(profile.user_id),
+        ])
+        setPublic(pub)
+        setPrivate(priv)
+        const s = await getProfileStats(profile.user_id)
         setStats(s)
     }
 
@@ -290,15 +425,29 @@ export default function UserProfile() {
 
                                     {/* Edit profile button */}
                                     {isOwner && !loading && (
-                                        <button
-                                            onClick={() => setShowEdit(true)}
-                                            className="w-full mt-5 flex items-center justify-center gap-2 py-3 rounded-xl border border-accent/15 bg-accent/[0.04] text-accent/70 font-satoshi text-sm font-semibold hover:text-accent hover:border-accent/40 hover:bg-accent/[0.08] hover:shadow-[0_0_20px_rgba(75,169,255,0.12)] transition-all duration-400 group/edit"
-                                        >
-                                            <svg className="w-3.5 h-3.5 group-hover/edit:rotate-12 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
-                                            </svg>
-                                            Edit Profile
-                                        </button>
+                                        <div className="w-full mt-5 flex flex-col gap-3">
+                                            <button
+                                                onClick={() => setShowEdit(true)}
+                                                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-accent/15 bg-accent/[0.04] text-accent/70 font-satoshi text-sm font-semibold hover:text-accent hover:border-accent/40 hover:bg-accent/[0.08] hover:shadow-[0_0_20px_rgba(75,169,255,0.12)] transition-all duration-400 group/edit"
+                                            >
+                                                <svg className="w-3.5 h-3.5 group-hover/edit:rotate-12 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                                                </svg>
+                                                Edit Profile
+                                            </button>
+
+                                            {!hasReviewed && (
+                                                <button
+                                                    onClick={() => setShowReviewModal(true)}
+                                                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-emerald-400 font-satoshi text-sm font-semibold hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-all duration-400 group/review"
+                                                >
+                                                    <svg className="w-3.5 h-3.5 group-hover/review:scale-110 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" />
+                                                    </svg>
+                                                    Add Review
+                                                </button>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             </div>
@@ -330,7 +479,7 @@ export default function UserProfile() {
                                     <div className="flex items-center gap-3">
                                         <div className="w-1 h-6 rounded-full bg-accent/60" />
                                         <h2 className="font-clash font-medium text-xl text-white tracking-tight">
-                                            Public Skills
+                                            Published Skills
                                         </h2>
                                         {!loading && (
                                             <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-accent/10 border border-accent/15 font-satoshi font-bold text-xs text-accent/80">
@@ -389,15 +538,48 @@ export default function UserProfile() {
                                 ) : (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         {publicSkills.map((skill, i) => (
-                                            <SkillCard key={skill.id} skill={skill} index={i} />
+                                            <SkillCard
+                                                key={skill.id}
+                                                skill={skill}
+                                                index={i}
+                                                onClick={setSelectedSkill}
+                                                isOwner={isOwner}
+                                                onDelete={isOwner ? handleDelete : undefined}
+                                                onMakePrivate={isOwner ? handleMakePrivate : undefined}
+                                            />
                                         ))}
                                     </div>
                                 )}
                             </section>
 
+                            {/* ── Saved Skills ── */}
+                            {!loading && savedSkills.length > 0 && (
+                                <section className="profile-fade-in" style={{ animationDelay: '0.3s' }}>
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <div className="w-1 h-6 rounded-full bg-emerald-500/60" />
+                                        <h2 className="font-clash font-medium text-xl text-white tracking-tight">
+                                            Saved Skills
+                                        </h2>
+                                        <span className="inline-flex items-center justify-center min-w-[28px] h-7 px-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/15 font-satoshi font-bold text-xs text-emerald-400">
+                                            {savedSkills.length}
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        {savedSkills.map((skill, i) => (
+                                            <SkillCard
+                                                key={skill.id}
+                                                skill={skill}
+                                                index={i}
+                                                onClick={setSelectedSkill}
+                                            />
+                                        ))}
+                                    </div>
+                                </section>
+                            )}
+
                             {/* ── Private Vault (owner only) ── */}
                             {isOwner && !loading && (
-                                <section className="profile-fade-in" style={{ animationDelay: '0.3s' }}>
+                                <section className="profile-fade-in" style={{ animationDelay: '0.4s' }}>
                                     {/* Vault header */}
                                     <div className="relative flex items-center gap-3 mb-6 py-4 px-5 rounded-2xl overflow-hidden">
                                         {/* Background gradient */}
@@ -430,33 +612,18 @@ export default function UserProfile() {
                                             No private skills. All saved skills are public.
                                         </p>
                                     ) : (
-                                        <div className="space-y-2.5">
-                                            {privateSkills.map(skill => (
-                                                <div key={skill.id} className="group flex items-center gap-4 px-5 py-4 rounded-xl bg-gradient-to-r from-navy-50/50 to-transparent border border-white/[0.05] hover:border-accent/20 hover:bg-navy-50 transition-all duration-400">
-                                                    {/* Lock icon */}
-                                                    <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/[0.03] border border-white/[0.06] group-hover:border-accent/20 transition-colors duration-300">
-                                                        <svg className="w-3.5 h-3.5 text-white/20 group-hover:text-accent/40 transition-colors duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                                                        </svg>
-                                                    </div>
-
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="font-satoshi font-bold text-sm text-white/80 truncate">{skill.title}</p>
-                                                        {skill.category && (
-                                                            <p className="font-satoshi text-[11px] text-white/25 mt-0.5 uppercase tracking-wider">{skill.category}</p>
-                                                        )}
-                                                    </div>
-
-                                                    <button
-                                                        onClick={() => handleMakePublic(skill.id)}
-                                                        className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white/[0.02] border border-white/[0.08] text-white/50 font-satoshi text-xs font-medium hover:bg-accent/10 hover:border-accent/25 hover:text-accent hover:shadow-[0_0_12px_rgba(75,169,255,0.1)] transition-all duration-300"
-                                                    >
-                                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 10.5V6.75a4.5 4.5 0 119 0v3.75M3.75 21.75h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H3.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                                                        </svg>
-                                                        Make Public
-                                                    </button>
-                                                </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            {privateSkills.map((skill, i) => (
+                                                <SkillCard
+                                                    key={skill.id}
+                                                    skill={skill}
+                                                    index={i}
+                                                    isPrivate
+                                                    isOwner
+                                                    onClick={setSelectedSkill}
+                                                    onDelete={handleDelete}
+                                                    onMakePrivate={undefined}
+                                                />
                                             ))}
                                         </div>
                                     )}
@@ -473,6 +640,24 @@ export default function UserProfile() {
                     profile={profile}
                     onClose={() => setShowEdit(false)}
                     onSave={updated => setProfile(prev => ({ ...prev, ...updated }))}
+                />
+            )}
+
+            {/* Skill Detail Modal */}
+            {selectedSkill && (
+                <UserSkillModal
+                    skill={selectedSkill}
+                    onClose={() => setSelectedSkill(null)}
+                    isOwner={isOwner}
+                    onDelete={async (id) => { await handleDelete(id) }}
+                    onTogglePrivate={handleModalToggle}
+                />
+            )}
+            {showReviewModal && (
+                <ReviewModal
+                    onClose={() => setShowReviewModal(false)}
+                    authUser={authUser}
+                    onSubmitted={() => setHasReviewed(true)}
                 />
             )}
         </>

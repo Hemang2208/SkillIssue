@@ -40,6 +40,7 @@ function SkillModal({ skill, onClose }) {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
     const [copied, setCopied] = useState(false)
+    const [linkCopied, setLinkCopied] = useState(false)
     const [downloading, setDownloading] = useState(false)
     const [viewMode, setViewMode] = useState('rendered') // 'rendered' | 'raw'
 
@@ -74,6 +75,19 @@ function SkillModal({ skill, onClose }) {
         await navigator.clipboard.writeText(content)
         setCopied(true)
         setTimeout(() => setCopied(false), 2000)
+    }
+
+    async function handleShare() {
+        // Encode repo:path as a stable URL query so links are permanent
+        const params = new URLSearchParams({ repo: skill.repo, path: skill.path })
+        const url = `${window.location.origin}/browse?${params.toString()}`
+        if (navigator.share) {
+            try { await navigator.share({ title: skill.displayName, url }) } catch { /* cancelled */ }
+        } else {
+            await navigator.clipboard.writeText(url)
+            setLinkCopied(true)
+            setTimeout(() => setLinkCopied(false), 2000)
+        }
     }
 
     async function handleDownload() {
@@ -277,6 +291,20 @@ function SkillModal({ skill, onClose }) {
                             )}
                             <span className="font-satoshi text-sm text-white/60 group-hover:text-white/80 transition-colors">
                                 {copied ? 'Copied!' : 'Copy'}
+                            </span>
+                        </button>
+
+                        {/* Share */}
+                        <button
+                            onClick={handleShare}
+                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/10 bg-white/[0.03] hover:border-accent/30 hover:bg-white/[0.06] transition-all duration-300 group"
+                        >
+                            {linkCopied
+                                ? <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                                : <svg className="w-4 h-4 text-white/40 group-hover:text-accent transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" /></svg>
+                            }
+                            <span className="font-satoshi text-sm text-white/60 group-hover:text-white/80 transition-colors">
+                                {linkCopied ? 'Link copied!' : 'Share'}
                             </span>
                         </button>
 
