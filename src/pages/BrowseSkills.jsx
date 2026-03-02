@@ -35,7 +35,14 @@ function SkeletonCard() {
     )
 }
 
-// ── Skill Detail Modal ──────────────────────────────────────────────────
+// Module-level: persists the last-used size for the whole browser session
+// so closing and reopening a different skill remembers your preferred size.
+let _cachedModalSize = null
+function getDefaultSize() {
+    return _cachedModalSize || { width: 768, height: Math.round(window.innerHeight * 0.85) }
+}
+
+// ── Skill Detail Modal ───────────────────────────────────────────────────────────
 function SkillModal({ skill, onClose }) {
     const [content, setContent] = useState(null)
     const [loading, setLoading] = useState(true)
@@ -45,10 +52,10 @@ function SkillModal({ skill, onClose }) {
     const [downloading, setDownloading] = useState(false)
     const [viewMode, setViewMode] = useState('rendered') // 'rendered' | 'raw'
 
-    // ── Resize state ─────────────────────────────────────────────────────
+    // ── Resize state ──────────────────────────────────────────────────────
     const MIN_W = 480
     const MIN_H = 400
-    const [size, setSize] = useState({ width: 768, height: Math.round(window.innerHeight * 0.85) })
+    const [size, setSize] = useState(getDefaultSize)
     const dragRef = useRef(null)
     const isResizing = useRef(false)
 
@@ -69,7 +76,9 @@ function SkillModal({ skill, onClose }) {
             const dy = ev.clientY - dragRef.current.startY
             const newW = Math.min(Math.max(dragRef.current.startW + dx, MIN_W), window.innerWidth - 32)
             const newH = Math.min(Math.max(dragRef.current.startH + dy, MIN_H), window.innerHeight - 32)
-            setSize({ width: newW, height: newH })
+            const next = { width: newW, height: newH }
+            _cachedModalSize = next  // save for next open
+            setSize(next)
         }
         const onUp = () => {
             isResizing.current = false
@@ -392,15 +401,14 @@ function SkillModal({ skill, onClose }) {
                 {/* ── Resize handle ── */}
                 <div
                     onMouseDown={onResizeMouseDown}
-                    className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize z-10 flex items-end justify-end p-1.5 group"
+                    className="absolute bottom-0 right-0 w-8 h-8 cursor-se-resize z-10 flex items-end justify-end p-2 group"
                     title="Drag to resize"
                 >
-                    <svg width="10" height="10" viewBox="0 0 10 10" className="text-white/20 group-hover:text-accent/70 transition-colors duration-150">
-                        <circle cx="2" cy="6" r="1" fill="currentColor" />
-                        <circle cx="6" cy="6" r="1" fill="currentColor" />
-                        <circle cx="10" cy="6" r="1" fill="currentColor" />
-                        <circle cx="6" cy="10" r="1" fill="currentColor" />
-                        <circle cx="10" cy="10" r="1" fill="currentColor" />
+                    {/* L-shaped corner bracket that reads clearly at any size */}
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
+                        className="text-white/40 group-hover:text-accent transition-colors duration-150 drop-shadow-[0_0_3px_rgba(75,169,255,0.4)] group-hover:drop-shadow-[0_0_6px_rgba(75,169,255,0.7)]">
+                        {/* bottom-right corner bracket */}
+                        <path d="M1 11 L11 11 L11 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                 </div>
             </div>
