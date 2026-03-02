@@ -2,6 +2,29 @@ import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
+/** Small self-contained avatar that falls back to initials on image error. */
+function AvatarImg({ src, name, size = 'w-8 h-8', textSize = 'text-xs' }) {
+    const [err, setErr] = useState(false)
+    useEffect(() => { setErr(false) }, [src])
+    if (src && !err) {
+        return (
+            <img
+                src={src}
+                alt={name}
+                className={`${size} rounded-full border border-accent/30 object-cover hover:border-accent transition-colors`}
+                onError={() => setErr(true)}
+            />
+        )
+    }
+    return (
+        <div className={`${size} rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center hover:border-accent transition-colors`}>
+            <span className={`font-clash font-bold ${textSize} text-accent`}>
+                {name?.charAt(0)?.toUpperCase() ?? 'U'}
+            </span>
+        </div>
+    )
+}
+
 export default function Navbar() {
     const [scrolled, setScrolled] = useState(false)
     const [mobileOpen, setMobileOpen] = useState(false)
@@ -89,19 +112,10 @@ export default function Navbar() {
                                     title="My Profile"
                                     className="relative group/avatar"
                                 >
-                                    {profile?.avatar_url || user?.user_metadata?.avatar_url ? (
-                                        <img
-                                            src={profile?.avatar_url || user.user_metadata.avatar_url}
-                                            alt={profile?.display_name || user?.user_metadata?.full_name || 'User'}
-                                            className="w-8 h-8 rounded-full border border-accent/30 object-cover hover:border-accent transition-colors"
-                                        />
-                                    ) : (
-                                        <div className="w-8 h-8 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center hover:border-accent transition-colors">
-                                            <span className="font-clash font-bold text-xs text-accent">
-                                                {user?.user_metadata?.full_name?.charAt(0) ?? 'U'}
-                                            </span>
-                                        </div>
-                                    )}
+                                    <AvatarImg
+                                        src={profile?.avatar_url || user?.user_metadata?.avatar_url}
+                                        name={profile?.display_name || user?.user_metadata?.full_name || 'User'}
+                                    />
                                     {/* Tooltip */}
                                     <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap font-satoshi text-[10px] text-white/50 bg-navy border border-white/10 px-2 py-0.5 rounded-md opacity-0 group-hover/avatar:opacity-100 transition-opacity pointer-events-none">
                                         @{profile?.username}
@@ -173,19 +187,10 @@ export default function Navbar() {
                                     onClick={() => setMobileOpen(false)}
                                     className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/[0.04] transition-all"
                                 >
-                                    {profile?.avatar_url || user?.user_metadata?.avatar_url ? (
-                                        <img
-                                            src={profile?.avatar_url || user.user_metadata.avatar_url}
-                                            alt="Profile"
-                                            className="w-8 h-8 rounded-full border border-accent/30 object-cover"
-                                        />
-                                    ) : (
-                                        <div className="w-8 h-8 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center">
-                                            <span className="font-clash font-bold text-xs text-accent">
-                                                {user?.user_metadata?.full_name?.charAt(0) ?? 'U'}
-                                            </span>
-                                        </div>
-                                    )}
+                                    <AvatarImg
+                                        src={profile?.avatar_url || user?.user_metadata?.avatar_url}
+                                        name={profile?.display_name || user?.user_metadata?.full_name || 'User'}
+                                    />
                                     <div>
                                         <p className="font-satoshi text-sm text-white/80 leading-none">
                                             {user?.user_metadata?.full_name ?? 'My Profile'}

@@ -321,6 +321,9 @@ export default function UserProfile() {
     const joinedDate = profile?.created_at
         ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
         : null
+    const [imgError, setImgError] = useState(false)
+    // Reset imgError whenever the avatarUrl changes (e.g. after profile edit)
+    useEffect(() => { setImgError(false) }, [avatarUrl])
 
     return (
         <>
@@ -355,7 +358,7 @@ export default function UserProfile() {
                                         {/* Avatar */}
                                         {loading ? (
                                             <div className="w-32 h-32 rounded-full bg-white/[0.04] animate-pulse" />
-                                        ) : avatarUrl ? (
+                                        ) : avatarUrl && !imgError ? (
                                             <div className="relative group">
                                                 {/* Outer glow ring — animated */}
                                                 <div className="absolute -inset-2 rounded-full profile-avatar-glow opacity-60 group-hover:opacity-100 transition-opacity duration-700" />
@@ -365,6 +368,7 @@ export default function UserProfile() {
                                                     src={avatarUrl}
                                                     alt={displayName}
                                                     className="relative w-32 h-32 rounded-full border-2 border-navy object-cover shadow-[0_0_40px_rgba(75,169,255,0.15)]"
+                                                    onError={() => setImgError(true)}
                                                 />
                                                 {isOwner && (
                                                     <span className="absolute bottom-1 right-1 w-6 h-6 bg-accent rounded-full border-[3px] border-navy shadow-[0_0_12px_rgba(75,169,255,0.6)] flex items-center justify-center">
@@ -607,26 +611,31 @@ export default function UserProfile() {
                                         </span>
                                     </div>
 
-                                    {privateSkills.length === 0 ? (
-                                        <p className="font-satoshi text-sm text-white/25 text-center py-10 bg-white/[0.01] rounded-2xl border border-dashed border-white/[0.04]">
-                                            No private skills. All saved skills are public.
-                                        </p>
-                                    ) : (
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            {privateSkills.map((skill, i) => (
-                                                <SkillCard
-                                                    key={skill.id}
-                                                    skill={skill}
-                                                    index={i}
-                                                    isPrivate
-                                                    isOwner
-                                                    onClick={setSelectedSkill}
-                                                    onDelete={handleDelete}
-                                                    onMakePrivate={undefined}
-                                                />
-                                            ))}
-                                        </div>
-                                    )}
+                                    {/* Exclude externally-saved skills — those live in Saved Skills above */}
+                                    {(() => {
+                                        const savedIds = new Set(savedSkills.map(s => s.id))
+                                        const vaultSkills = privateSkills.filter(s => !savedIds.has(s.id))
+                                        return vaultSkills.length === 0 ? (
+                                            <p className="font-satoshi text-sm text-white/25 text-center py-10 bg-white/[0.01] rounded-2xl border border-dashed border-white/[0.04]">
+                                                No private skills. All saved skills are public.
+                                            </p>
+                                        ) : (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                {vaultSkills.map((skill, i) => (
+                                                    <SkillCard
+                                                        key={skill.id}
+                                                        skill={skill}
+                                                        index={i}
+                                                        isPrivate
+                                                        isOwner
+                                                        onClick={setSelectedSkill}
+                                                        onDelete={handleDelete}
+                                                        onMakePrivate={undefined}
+                                                    />
+                                                ))}
+                                            </div>
+                                        )
+                                    })()}
                                 </section>
                             )}
                         </div>

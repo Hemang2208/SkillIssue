@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
@@ -13,6 +14,9 @@ import {
     OPENCLAW_SOURCE,
 } from '../lib/githubService'
 import FeaturedSkillCard from '../components/FeaturedSkillCard'
+import { saveSkill, getAllPublicSkills } from '../lib/skillService'
+import { toggleSavedSkill, getProfilesByUserIds } from '../lib/userService'
+import UserSkillModal from '../components/UserSkillModal'
 
 // ── Skeleton loader ─────────────────────────────────────────────────────
 function SkeletonCard() {
@@ -39,11 +43,11 @@ function SkeletonCard() {
 // so closing and reopening a different skill remembers your preferred size.
 let _cachedModalSize = null
 function getDefaultSize() {
-    return _cachedModalSize || { width: 768, height: Math.round(window.innerHeight * 0.85) }
+    return _cachedModalSize || { width: Math.min(1100, Math.round(window.innerWidth * 0.90)), height: Math.round(window.innerHeight * 0.88) }
 }
 
 // ── Skill Detail Modal ───────────────────────────────────────────────────────────
-function SkillModal({ skill, onClose }) {
+function SkillModal({ skill, onClose, authUser, authProfile }) {
     const [content, setContent] = useState(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
@@ -51,6 +55,9 @@ function SkillModal({ skill, onClose }) {
     const [linkCopied, setLinkCopied] = useState(false)
     const [downloading, setDownloading] = useState(false)
     const [viewMode, setViewMode] = useState('rendered') // 'rendered' | 'raw'
+    const [saving, setSaving] = useState(false)       // save-to-library state
+    const [saved, setSaved] = useState(false)          // brief ✓ flash
+    const [saveError, setSaveError] = useState(null)   // duplicate / error message
 
     // ── Resize state ──────────────────────────────────────────────────────
     const MIN_W = 480
@@ -151,6 +158,35 @@ function SkillModal({ skill, onClose }) {
         }
     }
 
+    async function handleSave() {
+        if (!content || saving) return
+        setSaving(true)
+        setSaveError(null)
+        try {
+            // 1. Create the skill document in Appwrite
+            const newSkill = await saveSkill({
+                title: skill.displayName,
+                content,
+                tags: [],
+                visibility: 'private',
+                description: `Saved from GitHub: ${skill.repo}`,
+                category: '',
+            })
+            // 2. Add the new skill's ID to the user's saved_skills list
+            //    so it appears in the Saved Skills section, not the Private Vault
+            if (authProfile?.id) {
+                await toggleSavedSkill(authProfile.id, newSkill.id, 'save')
+            }
+            setSaved(true)
+            setTimeout(() => setSaved(false), 2500)
+        } catch (err) {
+            setSaveError(err.message || 'Failed to save')
+            setTimeout(() => setSaveError(null), 3500)
+        } finally {
+            setSaving(false)
+        }
+    }
+
     if (!skill) return null
 
     const isOpenClaw = skill.isOpenClaw
@@ -167,10 +203,10 @@ function SkillModal({ skill, onClose }) {
             <div
                 onClick={(e) => e.stopPropagation()}
                 className="relative rounded-2xl border border-white/10 bg-navy overflow-hidden flex flex-col animate-fade-in-up"
-                style={{ width: size.width, height: size.height, maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100vh - 32px)' }}
+                style={{ width: size.width, height: size.height, maxWidth: 'calc(100vw - 16px)', maxHeight: 'calc(100vh - 16px)' }}
             >
                 {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06] bg-white/[0.02] shrink-0">
+                <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-white/[0.06] bg-white/[0.02] shrink-0">
                     <div className="flex items-center gap-3 min-w-0">
                         <img
                             src={isOpenClaw
@@ -225,7 +261,7 @@ function SkillModal({ skill, onClose }) {
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto p-6">
+                <div className="flex-1 overflow-y-auto p-3 sm:p-6">
                     {loading && (
                         <div className="flex items-center justify-center py-20">
                             <svg className="w-6 h-6 text-accent animate-spin" fill="none" viewBox="0 0 24 24">
@@ -256,32 +292,35 @@ function SkillModal({ skill, onClose }) {
                                     <div className="w-3 h-3 rounded-full bg-green-500/50" />
                                 </div>
                                 <span className="font-mono text-xs text-white/20">SKILL.md</span>
-                                {/* Rendered | Raw pill toggle */}
-                                <div className="flex items-center rounded-lg bg-white/[0.04] border border-white/[0.06] p-0.5">
+                                {/* Rendered | Raw icon toggle */}
+                                <div className="flex items-center rounded-lg bg-white/[0.04] border border-white/[0.06] p-0.5" role="group">
+                                    {/* Eye = rendered/preview */}
                                     <button
                                         onClick={() => setViewMode('rendered')}
-                                        className={`px-3 py-1 rounded-md font-satoshi text-[11px] font-semibold transition-all duration-200 ${viewMode === 'rendered'
-                                            ? 'bg-accent/20 text-accent shadow-sm'
-                                            : 'text-white/30 hover:text-white/55'
-                                            }`}
+                                        title="Rendered view"
+                                        className={`p-1.5 rounded-md transition-all duration-200 ${viewMode === 'rendered' ? 'bg-accent/20 text-accent shadow-sm' : 'text-white/30 hover:text-white/55'}`}
                                     >
-                                        Rendered
+                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        </svg>
                                     </button>
+                                    {/* Code brackets = raw */}
                                     <button
                                         onClick={() => setViewMode('raw')}
-                                        className={`px-3 py-1 rounded-md font-satoshi text-[11px] font-semibold transition-all duration-200 ${viewMode === 'raw'
-                                            ? 'bg-accent/20 text-accent shadow-sm'
-                                            : 'text-white/30 hover:text-white/55'
-                                            }`}
+                                        title="Raw markdown"
+                                        className={`p-1.5 rounded-md transition-all duration-200 ${viewMode === 'raw' ? 'bg-accent/20 text-accent shadow-sm' : 'text-white/30 hover:text-white/55'}`}
                                     >
-                                        Raw
+                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+                                        </svg>
                                     </button>
                                 </div>
                             </div>
 
                             {/* Rendered view — pretty markdown */}
                             {viewMode === 'rendered' && (
-                                <div className="p-6 overflow-y-auto flex-1">
+                                <div key="rendered" className="p-6 overflow-y-auto flex-1 modal-view-enter">
                                     <ReactMarkdown
                                         remarkPlugins={[remarkGfm]}
                                         components={{
@@ -316,7 +355,7 @@ function SkillModal({ skill, onClose }) {
 
                             {/* Raw view — monospace plain text */}
                             {viewMode === 'raw' && (
-                                <pre className="p-5 text-sm font-mono text-white/70 whitespace-pre-wrap overflow-x-auto leading-relaxed overflow-y-auto flex-1">
+                                <pre key="raw" className="p-5 text-sm font-mono text-white/70 whitespace-pre-wrap overflow-x-auto leading-relaxed overflow-y-auto flex-1 modal-view-enter">
                                     {content}
                                 </pre>
                             )}
@@ -326,10 +365,11 @@ function SkillModal({ skill, onClose }) {
 
                 {/* Footer actions */}
                 {content && (
-                    <div className="flex items-center gap-3 px-6 py-4 border-t border-white/[0.06] bg-white/[0.02] shrink-0">
+                    <div className="flex flex-wrap items-center gap-2 px-3 sm:px-6 py-3 sm:py-4 border-t border-white/[0.06] bg-white/[0.02] shrink-0">
+                        {/* Row 1: Copy + Share + Download */}
                         <button
                             onClick={handleCopy}
-                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/10 bg-white/[0.03] hover:border-accent/30 hover:bg-white/[0.06] transition-all duration-300 group"
+                            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl border border-white/10 bg-white/[0.03] hover:border-accent/30 hover:bg-white/[0.06] transition-all duration-300 group"
                         >
                             {copied ? (
                                 <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -340,7 +380,7 @@ function SkillModal({ skill, onClose }) {
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
                                 </svg>
                             )}
-                            <span className="font-satoshi text-sm text-white/60 group-hover:text-white/80 transition-colors">
+                            <span className="font-satoshi text-sm text-white/60 group-hover:text-white/80 transition-colors hidden sm:inline">
                                 {copied ? 'Copied!' : 'Copy'}
                             </span>
                         </button>
@@ -348,13 +388,13 @@ function SkillModal({ skill, onClose }) {
                         {/* Share */}
                         <button
                             onClick={handleShare}
-                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/10 bg-white/[0.03] hover:border-accent/30 hover:bg-white/[0.06] transition-all duration-300 group"
+                            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl border border-white/10 bg-white/[0.03] hover:border-accent/30 hover:bg-white/[0.06] transition-all duration-300 group"
                         >
                             {linkCopied
                                 ? <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
                                 : <svg className="w-4 h-4 text-white/40 group-hover:text-accent transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" /></svg>
                             }
-                            <span className="font-satoshi text-sm text-white/60 group-hover:text-white/80 transition-colors">
+                            <span className="font-satoshi text-sm text-white/60 group-hover:text-white/80 transition-colors hidden sm:inline">
                                 {linkCopied ? 'Link copied!' : 'Share'}
                             </span>
                         </button>
@@ -362,7 +402,7 @@ function SkillModal({ skill, onClose }) {
                         <button
                             onClick={handleDownload}
                             disabled={downloading}
-                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent text-navy font-satoshi font-bold text-sm hover:bg-[#6bbcff] hover:shadow-[0_0_20px_rgba(75,169,255,0.3)] transition-all duration-300 disabled:opacity-50"
+                            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-accent text-navy font-satoshi font-bold text-sm hover:bg-[#6bbcff] hover:shadow-[0_0_20px_rgba(75,169,255,0.3)] transition-all duration-300 disabled:opacity-50"
                         >
                             {downloading ? (
                                 <>
@@ -377,24 +417,70 @@ function SkillModal({ skill, onClose }) {
                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                                     </svg>
-                                    Download .zip
+                                    <span className="hidden sm:inline">Download .zip</span>
                                 </>
                             )}
                         </button>
 
+                        {/* GitHub — sits on same row on desktop, wraps naturally on mobile */}
                         <a
                             href={skill.htmlUrl || skill.attributionUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/10 bg-white/[0.03] hover:border-accent/30 hover:bg-white/[0.06] transition-all duration-300 group ml-auto"
+                            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl border border-white/10 bg-white/[0.03] hover:border-accent/30 hover:bg-white/[0.06] transition-all duration-300 group sm:ml-auto"
                         >
                             <svg className="w-4 h-4 text-white/40 group-hover:text-accent transition-colors" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
                             </svg>
-                            <span className="font-satoshi text-sm text-white/60 group-hover:text-white/80 transition-colors">
-                                View on GitHub
-                            </span>
+                            <span className="font-satoshi text-sm text-white/60 group-hover:text-white/80 transition-colors hidden sm:inline">View on GitHub</span>
                         </a>
+
+                        {/* Save to Library — only for logged-in users */}
+                        {authUser && content && (
+                            <button
+                                onClick={handleSave}
+                                disabled={saving || saved}
+                                title={saved ? 'Saved to your library!' : saveError || 'Save to your skill library'}
+                                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl border transition-all duration-300 font-satoshi font-semibold text-sm
+                                    ${saved
+                                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400 cursor-default'
+                                        : saveError
+                                            ? 'border-red-500/30 bg-red-500/10 text-red-400 cursor-default'
+                                            : 'border-white/10 bg-white/[0.03] text-white/60 hover:border-accent/30 hover:bg-accent/[0.06] hover:text-accent'
+                                    }`}
+                            >
+                                {saved ? (
+                                    <>
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                        </svg>
+                                        <span className="hidden sm:inline">Saved!</span>
+                                    </>
+                                ) : saving ? (
+                                    <>
+                                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                        </svg>
+                                        <span className="hidden sm:inline">Saving…</span>
+                                    </>
+                                ) : saveError ? (
+                                    <>
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                                        </svg>
+                                        <span className="hidden sm:inline text-[12px]">{saveError.length > 30 ? 'Already saved' : saveError}</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
+                                        </svg>
+                                        <span className="hidden sm:inline">Save</span>
+                                    </>
+                                )}
+                            </button>
+                        )}
                     </div>
                 )}
 
@@ -416,10 +502,93 @@ function SkillModal({ skill, onClose }) {
     )
 }
 
+// ── Community DB Skill Card ───────────────────────────────────────────────────
+/** Card for skills stored in Appwrite (user-uploaded). */
+function DbSkillCard({ skill, uploaderProfile, onClick, index = 0 }) {
+    const { title, description, category, star_count = 0, copy_count = 0, $createdAt, created_at } = skill
+    const username = uploaderProfile?.username || 'unknown'
+
+    const ago = (() => {
+        const dateStr = $createdAt || created_at
+        if (!dateStr) return ''
+        const diff = Date.now() - new Date(dateStr).getTime()
+        const d = Math.floor(diff / 86400000)
+        if (Number.isNaN(d) || d < 0) return ''
+        if (d < 1) return 'today'
+        if (d === 1) return 'yesterday'
+        if (d < 30) return `${d}d ago`
+        if (d < 365) return `${Math.floor(d / 30)}mo ago`
+        return `${Math.floor(d / 365)}y ago`
+    })()
+
+    const categoryColors = {
+        coding: 'bg-blue-500/10 text-blue-300 border-blue-500/20',
+        writing: 'bg-purple-500/10 text-purple-300 border-purple-500/20',
+        research: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
+        analysis: 'bg-amber-500/10 text-amber-300 border-amber-500/20',
+        design: 'bg-pink-500/10 text-pink-300 border-pink-500/20',
+    }
+    const catStyle = categoryColors[category?.toLowerCase()] ?? 'bg-white/5 text-white/40 border-white/10'
+
+    return (
+        <div
+            className="skill-card-enter group relative bg-gradient-to-b from-navy-50 to-navy border border-white/[0.06] rounded-2xl p-5 hover:border-emerald-500/20 hover:shadow-[0_0_30px_rgba(16,185,129,0.05)] transition-all duration-400 hover:-translate-y-1 flex flex-col gap-3 cursor-pointer"
+            style={{ animationDelay: `${index * 60}ms` }}
+            onClick={() => onClick(skill)}
+        >
+            {/* Top edge highlight */}
+            <div className="absolute top-0 left-6 right-6 h-[1px] bg-gradient-to-r from-transparent via-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+            {/* Community tag */}
+            <span className="absolute top-4 right-4 flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/[0.08] border border-emerald-500/15 text-emerald-400/60 font-satoshi text-[10px] font-semibold uppercase tracking-wider">
+                Community
+            </span>
+
+            {/* Category + title */}
+            <div className="flex-1 min-w-0 pr-16">
+                {category && (
+                    <span className={`inline-flex items-center gap-1 mb-2.5 px-2 py-0.5 rounded-md text-[10px] font-satoshi font-bold border ${catStyle} uppercase tracking-wider`}>
+                        <span className="w-1 h-1 rounded-full bg-current opacity-60" />
+                        {category}
+                    </span>
+                )}
+                <h3 className="font-clash font-bold text-base text-white leading-snug group-hover:text-emerald-100 transition-colors duration-300 line-clamp-2">{title}</h3>
+                {description && (
+                    <p className="font-satoshi text-xs text-white/35 leading-relaxed mt-1 line-clamp-2">{description}</p>
+                )}
+            </div>
+
+            {/* Footer meta */}
+            <div className="flex items-center justify-between pt-2.5 border-t border-white/[0.04]">
+                {/* Uploader */}
+                <span className="font-satoshi text-xs text-accent/50 font-medium">@{username}</span>
+
+                {/* Stats */}
+                <div className="flex items-center gap-3">
+                    <span className="flex items-center gap-1 font-satoshi text-xs text-white/25">
+                        <svg className="w-3 h-3 text-amber-400/50" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                        </svg>
+                        {star_count}
+                    </span>
+                    <span className="flex items-center gap-1 font-satoshi text-xs text-white/25">
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5" />
+                        </svg>
+                        {copy_count}
+                    </span>
+                    {ago && <span className="text-white/20 font-satoshi text-[10px]">{ago}</span>}
+                </div>
+            </div>
+        </div>
+    )
+}
+
 // ── Main Page ───────────────────────────────────────────────────────────
 export default function BrowseSkills() {
     const navigate = useNavigate()
     const [searchParams] = useSearchParams()
+    const { user: authUser, profile: authProfile } = useAuth()
     const [officialSkills, setOfficialSkills] = useState([])
     const [openClawSkills, setOpenClawSkills] = useState([])
     const [communitySkills, setCommunitySkills] = useState([])
@@ -432,6 +601,13 @@ export default function BrowseSkills() {
     const PAGE_SIZE = 48
     const [ocPage, setOcPage] = useState(1)
 
+    // ─ DB community skills state
+    const [dbSkills, setDbSkills] = useState([])
+    const [dbProfiles, setDbProfiles] = useState({}) // user_id → profile
+    const [dbLoading, setDbLoading] = useState(true)
+    const [dbSort, setDbSort] = useState('recent')
+    const [selectedDbSkill, setSelectedDbSkill] = useState(null)
+
     // Backward-compat: redirect old /browse?repo=...&path=... share links
     useEffect(() => {
         const repo = searchParams.get('repo')
@@ -441,6 +617,7 @@ export default function BrowseSkills() {
         }
     }, [searchParams, navigate])
 
+    // Fetch GitHub featured skills
     useEffect(() => {
         fetchAllFeaturedSkills()
             .then(({ skills: s, openClawSkills: oc, communitySkills: cs, errors: e }) => {
@@ -455,6 +632,20 @@ export default function BrowseSkills() {
             })
             .finally(() => setLoading(false))
     }, [])
+
+    // Fetch DB community skills + uploader profiles
+    useEffect(() => {
+        setDbLoading(true)
+        getAllPublicSkills(dbSort)
+            .then(async (skills) => {
+                setDbSkills(skills)
+                const userIds = skills.map(s => s.user_id).filter(Boolean)
+                const profiles = await getProfilesByUserIds(userIds)
+                setDbProfiles(profiles)
+            })
+            .catch(console.error)
+            .finally(() => setDbLoading(false))
+    }, [dbSort])
 
     // Reset pagination when search/filter changes
     useEffect(() => { setOcPage(1) }, [searchQuery, activeFilter])
@@ -482,6 +673,19 @@ export default function BrowseSkills() {
     const filteredOpenClaw = openClawSkills.filter((s) => {
         const matchesFilter = activeFilter === 'All' || activeFilter === 'OpenClaw'
         return matchesFilter && (!q || s.displayName.toLowerCase().includes(q) || s.name.toLowerCase().includes(q) || s.author.toLowerCase().includes(q) || s.attributionLabel.toLowerCase().includes(q))
+    })
+
+    // Filter DB community skills by search (independent of tab filter)
+    const filteredDbSkills = dbSkills.filter((s) => {
+        if (!q) return true
+        const profile = dbProfiles[s.user_id]
+        return (
+            s.title?.toLowerCase().includes(q) ||
+            s.description?.toLowerCase().includes(q) ||
+            s.category?.toLowerCase().includes(q) ||
+            profile?.username?.toLowerCase().includes(q) ||
+            profile?.display_name?.toLowerCase().includes(q)
+        )
     })
 
     const totalCount = officialSkills.length + communitySkills.length + openClawSkills.length
@@ -754,13 +958,107 @@ export default function BrowseSkills() {
                     </div>
                 )}
 
+                {/* ──────────────────────────────────────────────────────────
+                     FROM THE COMMUNITY ─ Appwrite DB skills
+                ────────────────────────────────────────────────────────── */}
+                <div className="mt-20">
+                    {/* Section header */}
+                    <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
+                        <div>
+                            {/* Divider rule */}
+                            <div className="flex items-center gap-3 mb-5">
+                                <div className="h-px flex-1 bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent" />
+                                <span className="shrink-0 flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/[0.08] border border-emerald-500/15">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/60" />
+                                    <span className="font-satoshi text-[11px] font-semibold text-emerald-400/70 uppercase tracking-widest">Skill Issue</span>
+                                </span>
+                                <div className="h-px flex-1 bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent" />
+                            </div>
+                            <h2 className="font-clash font-bold text-3xl sm:text-4xl tracking-tight">
+                                From the{' '}
+                                <span className="italic text-emerald-400" style={{ textShadow: '0 0 40px rgba(52,211,153,0.3)' }}>Community</span>
+                            </h2>
+                            <p className="font-satoshi text-white/35 mt-2 text-sm">
+                                Skills created and shared directly by Skill Issue users.
+                            </p>
+                        </div>
+
+                        {/* Sort controls */}
+                        <div className="flex items-center gap-2 shrink-0">
+                            {[['recent', 'Recent'], ['most-rated', 'Top Rated'], ['most-copied', 'Most Copied']].map(([val, label]) => (
+                                <button
+                                    key={val}
+                                    onClick={() => setDbSort(val)}
+                                    className={`px-3 py-1.5 rounded-lg font-satoshi text-xs font-semibold transition-all duration-200 border ${dbSort === val
+                                        ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                                        : 'bg-white/[0.02] border-white/[0.06] text-white/35 hover:text-white/55 hover:border-white/15'
+                                        }`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Loading skeleton for DB skills */}
+                    {dbLoading && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {Array.from({ length: 6 }).map((_, i) => (
+                                <SkeletonCard key={i} />
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Community skill cards */}
+                    {!dbLoading && filteredDbSkills.length > 0 && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {filteredDbSkills.map((skill, i) => (
+                                <DbSkillCard
+                                    key={skill.id}
+                                    skill={skill}
+                                    uploaderProfile={dbProfiles[skill.user_id]}
+                                    onClick={setSelectedDbSkill}
+                                    index={i}
+                                />
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Empty state for community section */}
+                    {!dbLoading && filteredDbSkills.length === 0 && (
+                        <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+                            <div className="w-12 h-12 rounded-2xl bg-emerald-500/[0.06] border border-emerald-500/10 flex items-center justify-center">
+                                <svg className="w-5 h-5 text-emerald-400/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                                </svg>
+                            </div>
+                            <p className="font-satoshi text-white/20 text-sm">
+                                {searchQuery ? `No community skills match "${searchQuery}"` : 'No community skills yet — be the first!'}
+                            </p>
+                        </div>
+                    )}
+                </div>
+
             </div>
 
-            {/* ── Skill Detail Modal ──────────── */}
+            {/* ── GitHub Skill Detail Modal ────────── */}
             {selectedSkill && (
                 <SkillModal
                     skill={selectedSkill}
                     onClose={() => setSelectedSkill(null)}
+                    authUser={authUser}
+                    authProfile={authProfile}
+                />
+            )}
+
+            {/* ── DB Community Skill Modal ────────── */}
+            {selectedDbSkill && (
+                <UserSkillModal
+                    skill={selectedDbSkill}
+                    onClose={() => setSelectedDbSkill(null)}
+                    isOwner={authUser?.id === selectedDbSkill.user_id || authProfile?.user_id === selectedDbSkill.user_id}
+                    onDelete={authUser?.id === selectedDbSkill.user_id ? async () => { setSelectedDbSkill(null) } : undefined}
+                    onTogglePrivate={undefined}
                 />
             )}
         </div>

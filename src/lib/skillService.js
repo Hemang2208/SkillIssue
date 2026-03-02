@@ -101,6 +101,27 @@ export async function getPublicSkillsByUser(userId, sort = 'recent') {
     return res.documents.map(normalise)
 }
 
+/** Fetch ALL public skills across all users (for the community browse section). */
+export async function getAllPublicSkills(sort = 'recent', limit = 100) {
+    requireAppwrite()
+    const sortQuery = {
+        'recent': Query.orderDesc('$createdAt'),
+        'most-rated': Query.orderDesc('star_count'),
+        'most-copied': Query.orderDesc('copy_count'),
+    }[sort] ?? Query.orderDesc('$createdAt')
+
+    const res = await databases.listDocuments(
+        DATABASE_ID,
+        SKILLS_TABLE_ID,
+        [
+            Query.equal('visibility', 'public'),
+            sortQuery,
+            Query.limit(limit),
+        ]
+    )
+    return res.documents.map(normalise)
+}
+
 /** Fetch all PRIVATE skills for the owner of a profile. */
 export async function getPrivateSkillsByUser(userId) {
     requireAppwrite()

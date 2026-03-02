@@ -95,6 +95,28 @@ export async function getProfileByUsername(username) {
     }
 }
 
+/** Batch-fetch profiles for an array of auth user_ids.
+ *  Returns a map of { [user_id]: profile } for quick lookup. */
+export async function getProfilesByUserIds(userIds) {
+    if (!userIds || userIds.length === 0) return {}
+    requireAppwrite()
+    try {
+        const unique = [...new Set(userIds)]
+        const res = await databases.listDocuments(
+            DATABASE_ID,
+            USERS_TABLE_ID,
+            [Query.equal('user_id', unique), Query.limit(unique.length)]
+        )
+        const map = {}
+        for (const doc of res.documents) {
+            map[doc.user_id] = normalise(doc)
+        }
+        return map
+    } catch {
+        return {}
+    }
+}
+
 /** Returns aggregate stats for a user's public skills. */
 export async function getProfileStats(userId) {
     requireAppwrite()
