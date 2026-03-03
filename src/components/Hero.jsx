@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { getRecentUsers } from '../lib/userService'
+import Squares from './Squares'
 
 function CountUpNumber({ endValue = 70, duration = 2500 }) {
     const [count, setCount] = useState(0)
@@ -128,6 +130,17 @@ export default function Hero() {
 
     return (
         <section className="relative lg:min-h-[100dvh] pt-32 pb-20 lg:pt-20 lg:pb-0 flex flex-col lg:flex-row lg:items-center overflow-hidden">
+            {/* Squares Background */}
+            <div className="absolute inset-0 z-0">
+                <Squares
+                    direction="diagonal"
+                    speed={0.16}
+                    borderColor="#4ba9ff20"
+                    squareSize={60}
+                    hoverFillColor="#4ba9ff15"
+                    backgroundColor="#0a0e1a"
+                />
+            </div>
             {/* Background Orbs */}
             <div className="hero-orb w-[500px] h-[500px] bg-accent/10 top-[-10%] left-[-10%]" />
             <div className="hero-orb w-[400px] h-[400px] bg-accent/5 bottom-[5%] right-[-5%]" />
@@ -209,12 +222,12 @@ export default function Hero() {
                         </div>
 
                         <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-4 justify-center lg:justify-start">
-                            <a href="#browse" className="btn-primary w-full sm:w-auto justify-center text-center">
+                            <Link to="/browse" className="btn-primary w-full sm:w-auto justify-center text-center">
                                 <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
                                 </svg>
                                 Browse Skills
-                            </a>
+                            </Link>
                             <a href="#get-started" className="btn-outline w-full sm:w-auto justify-center text-center">
                                 Get Started Free
                                 <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

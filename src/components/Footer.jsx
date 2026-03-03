@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+
 export default function Footer() {
     return (
         <footer className="relative pt-16 pb-10 bg-[#05070d] border-t border-accent/10">
@@ -39,11 +41,21 @@ export default function Footer() {
                             Product
                         </h4>
                         <ul className="space-y-3">
-                            {['Browse Skills', 'Skill Editor', 'Public Marketplace', 'Private Vault', 'Pricing'].map((link) => (
-                                <li key={link}>
-                                    <a href="#" className="font-satoshi text-sm text-white/30 hover:text-accent-light transition-colors duration-300">
-                                        {link}
-                                    </a>
+                            {[
+                                { label: 'Browse Skills', to: '/browse' },
+                                { label: 'Skill Editor', to: '/build' },
+                                { label: 'Public Marketplace', to: '/browse' },
+                                { label: 'Private Vault', to: null },
+                                { label: 'Pricing', to: null },
+                            ].map(({ label, to }) => (
+                                <li key={label}>
+                                    {to ? (
+                                        <Link to={to} className="font-satoshi text-sm text-white/30 hover:text-accent-light transition-colors duration-300">
+                                            {label}
+                                        </Link>
+                                    ) : (
+                                        <span className="font-satoshi text-sm text-white/30 cursor-default">{label}</span>
+                                    )}
                                 </li>
                             ))}
                         </ul>
