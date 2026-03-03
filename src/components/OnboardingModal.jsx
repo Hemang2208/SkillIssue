@@ -70,6 +70,7 @@ export default function OnboardingModal() {
                 username,
                 email: user.email,
                 avatar_url: user.avatar_url ?? user.user_metadata?.avatar_url ?? null,
+                display_name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? null,
             })
             await refreshProfile()
             setNeedsOnboarding(false)

@@ -503,10 +503,13 @@ function SkillModal({ skill, onClose, authUser, authProfile }) {
 }
 
 // ── Community DB Skill Card ───────────────────────────────────────────────────
-/** Card for skills stored in Appwrite (user-uploaded). */
+/** Card for skills stored in Appwrite (user-uploaded). Matches OpenClaw CommunityCard design. */
 function DbSkillCard({ skill, uploaderProfile, onClick, index = 0 }) {
+    const navigate = useNavigate()
     const { title, description, category, star_count = 0, copy_count = 0, $createdAt, created_at } = skill
     const username = uploaderProfile?.username || 'unknown'
+    const displayName = uploaderProfile?.display_name || username
+    const avatarUrl = uploaderProfile?.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(username)}`
 
     const ago = (() => {
         const dateStr = $createdAt || created_at
@@ -532,53 +535,77 @@ function DbSkillCard({ skill, uploaderProfile, onClick, index = 0 }) {
 
     return (
         <div
-            className="skill-card-enter group relative bg-gradient-to-b from-navy-50 to-navy border border-white/[0.06] rounded-2xl p-5 hover:border-emerald-500/20 hover:shadow-[0_0_30px_rgba(16,185,129,0.05)] transition-all duration-400 hover:-translate-y-1 flex flex-col gap-3 cursor-pointer"
-            style={{ animationDelay: `${index * 60}ms` }}
             onClick={() => onClick(skill)}
+            className="skill-card-enter group relative bg-gradient-to-b from-navy-50 to-navy border border-white/[0.06] rounded-2xl p-5 hover:border-accent/20 hover:shadow-[0_0_30px_rgba(75,169,255,0.06)] transition-all duration-400 hover:-translate-y-1 flex flex-col gap-4 cursor-pointer"
+            style={{ animationDelay: `${index * 60}ms` }}
         >
             {/* Top edge highlight */}
-            <div className="absolute top-0 left-6 right-6 h-[1px] bg-gradient-to-r from-transparent via-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="absolute top-0 left-6 right-6 h-[1px] bg-gradient-to-r from-transparent via-accent/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
-            {/* Community tag */}
-            <span className="absolute top-4 right-4 flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/[0.08] border border-emerald-500/15 text-emerald-400/60 font-satoshi text-[10px] font-semibold uppercase tracking-wider">
-                Community
-            </span>
-
-            {/* Category + title */}
-            <div className="flex-1 min-w-0 pr-16">
-                {category && (
-                    <span className={`inline-flex items-center gap-1 mb-2.5 px-2 py-0.5 rounded-md text-[10px] font-satoshi font-bold border ${catStyle} uppercase tracking-wider`}>
-                        <span className="w-1 h-1 rounded-full bg-current opacity-60" />
-                        {category}
-                    </span>
-                )}
-                <h3 className="font-clash font-bold text-base text-white leading-snug group-hover:text-emerald-100 transition-colors duration-300 line-clamp-2">{title}</h3>
-                {description && (
-                    <p className="font-satoshi text-xs text-white/35 leading-relaxed mt-1 line-clamp-2">{description}</p>
-                )}
+            {/* Header row: user avatar + username + community tag */}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                    <img
+                        src={avatarUrl}
+                        alt={username}
+                        className="w-7 h-7 rounded-full border border-white/10 bg-white/5 object-cover"
+                    />
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation()
+                            navigate(`/user/${username}`)
+                        }}
+                        className="font-mono text-[11px] text-violet-300/80 hover:text-violet-200 transition-colors truncate max-w-[140px]"
+                        title={`@${username}`}
+                    >
+                        @{username}
+                    </button>
+                </div>
+                {/* Community tag */}
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-satoshi font-bold border bg-violet-500/10 text-violet-300 border-violet-500/20 uppercase tracking-wider">
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Community
+                </span>
             </div>
 
-            {/* Footer meta */}
-            <div className="flex items-center justify-between pt-2.5 border-t border-white/[0.04]">
-                {/* Uploader */}
-                <span className="font-satoshi text-xs text-accent/50 font-medium">@{username}</span>
+            {/* Skill name + description */}
+            <div className="flex-1 min-w-0">
+                <h3 className="font-clash font-bold text-lg text-white leading-snug mb-1 group-hover:text-accent-light transition-colors duration-300 line-clamp-2">
+                    {title}
+                </h3>
+                <p className="font-satoshi text-sm text-white/35 line-clamp-1">
+                    {description || `by ${displayName}`}
+                </p>
+            </div>
 
-                {/* Stats */}
+            {/* Footer */}
+            <div className="flex items-center justify-between pt-3 border-t border-white/[0.04]">
                 <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1 font-satoshi text-xs text-white/25">
-                        <svg className="w-3 h-3 text-amber-400/50" fill="currentColor" viewBox="0 0 24 24">
+                    {/* Stars */}
+                    <span className="flex items-center gap-1.5 font-satoshi text-xs text-white/30 group-hover:text-white/40 transition-colors">
+                        <svg className="w-3.5 h-3.5 text-amber-400/50 group-hover:text-amber-400/70 transition-colors" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                         </svg>
                         {star_count}
                     </span>
-                    <span className="flex items-center gap-1 font-satoshi text-xs text-white/25">
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    {/* Copies */}
+                    <span className="flex items-center gap-1.5 font-satoshi text-xs text-white/30 group-hover:text-white/40 transition-colors">
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5" />
                         </svg>
                         {copy_count}
                     </span>
                     {ago && <span className="text-white/20 font-satoshi text-[10px]">{ago}</span>}
                 </div>
+
+                {/* Category badge */}
+                {category && (
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-satoshi font-bold border ${catStyle} uppercase tracking-wider`}>
+                        {category}
+                    </span>
+                )}
             </div>
         </div>
     )
@@ -650,33 +677,40 @@ export default function BrowseSkills() {
     // Reset pagination when search/filter changes
     useEffect(() => { setOcPage(1) }, [searchQuery, activeFilter])
 
+    // Special Skill Issue filter ID
+    const SKILL_ISSUE_FILTER = 'Skill Issue'
+
     // All community filter IDs (OpenClaw + flat community labels)
     const communityFilterIds = ['OpenClaw', ...COMMUNITY_FLAT_SOURCES.map((s) => s.label)]
     const isCommunityFilter = communityFilterIds.includes(activeFilter)
+    const isSkillIssueFilter = activeFilter === SKILL_ISSUE_FILTER
 
-    const companies = ['All', ...FEATURED_SOURCES.map((s) => s.company), ...communityFilterIds]
+    const companies = ['All', SKILL_ISSUE_FILTER, ...FEATURED_SOURCES.map((s) => s.company), ...communityFilterIds]
 
     const q = searchQuery.toLowerCase().trim()
 
     const filteredOfficial = officialSkills.filter((s) => {
-        if (isCommunityFilter) return false
+        if (isCommunityFilter || isSkillIssueFilter) return false
         const matchesCompany = activeFilter === 'All' || s.company === activeFilter
         const matchesSearch = !q || s.displayName.toLowerCase().includes(q) || s.name.toLowerCase().includes(q) || s.company.toLowerCase().includes(q)
         return matchesCompany && matchesSearch
     })
 
     const filteredCommunity = communitySkills.filter((s) => {
+        if (isSkillIssueFilter) return false
         const matchesFilter = activeFilter === 'All' || activeFilter === s.label
         return matchesFilter && (!q || s.displayName.toLowerCase().includes(q) || s.name.toLowerCase().includes(q) || s.author?.toLowerCase().includes(q) || s.attributionLabel?.toLowerCase().includes(q))
     })
 
     const filteredOpenClaw = openClawSkills.filter((s) => {
+        if (isSkillIssueFilter) return false
         const matchesFilter = activeFilter === 'All' || activeFilter === 'OpenClaw'
         return matchesFilter && (!q || s.displayName.toLowerCase().includes(q) || s.name.toLowerCase().includes(q) || s.author.toLowerCase().includes(q) || s.attributionLabel.toLowerCase().includes(q))
     })
 
-    // Filter DB community skills by search (independent of tab filter)
+    // Filter DB community skills — only show for All or Skill Issue filter
     const filteredDbSkills = dbSkills.filter((s) => {
+        if (!isSkillIssueFilter && activeFilter !== 'All') return false
         if (!q) return true
         const profile = dbProfiles[s.user_id]
         return (
@@ -750,45 +784,60 @@ export default function BrowseSkills() {
                 </div>
 
                 {/* ── Filter tabs ─────────────── */}
-                <div className="flex flex-wrap items-center justify-center gap-2 mb-10">
+                <div className="flex items-center gap-2 mb-10 overflow-x-auto pb-1 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                     {companies.map((name) => {
                         const isActive = activeFilter === name
                         const isOC = name === 'OpenClaw'
+                        const isSkillIssueTab = name === SKILL_ISSUE_FILTER
                         const flatSource = COMMUNITY_FLAT_SOURCES.find((s) => s.label === name)
                         const isCommunityTab = isOC || !!flatSource
-                        // First community tab gets the pipe separator
+                        // Pipe separator before first GitHub/official tab
+                        const isFirstOfficial = name === FEATURED_SOURCES[0]?.company
+                        // Pipe separator before first community tab
                         const isFirstCommunity = name === communityFilterIds[0]
                         const officialSource = FEATURED_SOURCES.find((s) => s.company === name)
 
-                        const count = isOC
-                            ? openClawSkills.length
-                            : flatSource
-                                ? communitySkills.filter((s) => s.label === name).length
-                                : name === 'All'
-                                    ? totalCount
-                                    : officialSkills.filter((s) => s.company === name).length
+                        const count = isSkillIssueTab
+                            ? dbSkills.length
+                            : isOC
+                                ? openClawSkills.length
+                                : flatSource
+                                    ? communitySkills.filter((s) => s.label === name).length
+                                    : name === 'All'
+                                        ? totalCount + dbSkills.length
+                                        : officialSkills.filter((s) => s.company === name).length
 
-                        const activeStyle = isCommunityTab && isActive
-                            ? 'bg-violet-500/15 border-violet-500/30 text-violet-300 shadow-[0_0_15px_rgba(139,92,246,0.1)]'
-                            : isActive
-                                ? 'bg-accent/15 border-accent/30 text-accent shadow-[0_0_15px_rgba(75,169,255,0.1)]'
-                                : 'bg-white/[0.02] border-white/[0.06] text-white/40 hover:border-white/15 hover:text-white/60'
-                        const countStyle = isCommunityTab && isActive
-                            ? 'bg-violet-500/20 text-violet-300'
-                            : isActive
-                                ? 'bg-accent/20 text-accent'
-                                : 'bg-white/5 text-white/25'
+                        const activeStyle = (isSkillIssueTab || name === 'All') && isActive
+                            ? 'bg-accent/15 border-accent/30 text-accent shadow-[0_0_15px_rgba(75,169,255,0.1)]'
+                            : isCommunityTab && isActive
+                                ? 'bg-violet-500/15 border-violet-500/30 text-violet-300 shadow-[0_0_15px_rgba(139,92,246,0.1)]'
+                                : isActive
+                                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.1)]'
+                                    : 'bg-white/[0.02] border-white/[0.06] text-white/40 hover:border-white/15 hover:text-white/60'
+                        const countStyle = (isSkillIssueTab || name === 'All') && isActive
+                            ? 'bg-accent/20 text-accent'
+                            : isCommunityTab && isActive
+                                ? 'bg-violet-500/20 text-violet-300'
+                                : isActive
+                                    ? 'bg-emerald-500/20 text-emerald-300'
+                                    : 'bg-white/5 text-white/25'
 
-                        const avatarSrc = isOC
-                            ? 'https://avatars.githubusercontent.com/openclaw'
-                            : flatSource
-                                ? `https://avatars.githubusercontent.com/${flatSource.company}`
-                                : officialSource
-                                    ? getOrgAvatarUrl(officialSource.repo)
-                                    : null
+                        const avatarSrc = isSkillIssueTab
+                            ? '/favicon.png'
+                            : isOC
+                                ? 'https://avatars.githubusercontent.com/openclaw'
+                                : flatSource
+                                    ? `https://avatars.githubusercontent.com/${flatSource.company}`
+                                    : officialSource
+                                        ? getOrgAvatarUrl(officialSource.repo)
+                                        : null
 
                         return (
-                            <div key={name} className="flex items-center gap-2">
+                            <div key={name} className="flex items-center gap-2 shrink-0">
+                                {/* Pipe separator before first official tab */}
+                                {isFirstOfficial && (
+                                    <span className="w-px h-5 bg-white/10 rounded-full mx-1 shrink-0" />
+                                )}
                                 {/* Pipe separator before first community tab */}
                                 {isFirstCommunity && (
                                     <span className="w-px h-5 bg-white/10 rounded-full mx-1 shrink-0" />
@@ -801,7 +850,7 @@ export default function BrowseSkills() {
                                         <img
                                             src={avatarSrc}
                                             alt={name}
-                                            className={`w-4 h-4 ${isCommunityTab ? 'rounded-full' : 'rounded'}`}
+                                            className={`w-4 h-4 ${isSkillIssueTab ? 'rounded-md' : isCommunityTab ? 'rounded-full' : 'rounded'}`}
                                         />
                                     )}
                                     {name}
@@ -838,8 +887,41 @@ export default function BrowseSkills() {
                 )}
 
                 {/* ── Unified skills grid ─────────────────────────────────── */}
-                {!loading && (filteredOfficial.length > 0 || filteredCommunity.length > 0 || filteredOpenClaw.length > 0) && (
+                {(!loading || !dbLoading) && (filteredOfficial.length > 0 || filteredCommunity.length > 0 || filteredOpenClaw.length > 0 || filteredDbSkills.length > 0) && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+
+                        {/* ── From the Community (Skill Issue DB) — first, leftmost ── */}
+                        {!dbLoading && filteredDbSkills.length > 0 && (
+                            <>
+                                <div className="col-span-1 sm:col-span-2 lg:col-span-3 flex items-center gap-4 py-2">
+                                    <div className="flex-1 h-[1px] bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent" />
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <img
+                                            src="/skill issue white .png"
+                                            alt="Skill Issue"
+                                            className="h-4 w-auto object-contain opacity-60"
+                                        />
+                                        <span className="text-emerald-500/20 select-none">·</span>
+                                        <span className="font-satoshi text-[11px] font-semibold text-white/20 tracking-widest uppercase">{filteredDbSkills.length} skills</span>
+                                    </div>
+                                    <div className="flex-1 h-[1px] bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent" />
+                                </div>
+                                {filteredDbSkills.map((skill, i) => (
+                                    <DbSkillCard
+                                        key={skill.id}
+                                        skill={skill}
+                                        uploaderProfile={dbProfiles[skill.user_id]}
+                                        onClick={setSelectedDbSkill}
+                                        index={i}
+                                    />
+                                ))}
+                                {/* Separator after DB skills before GitHub skills */}
+                                {(filteredOfficial.length > 0 || filteredCommunity.length > 0 || filteredOpenClaw.length > 0) && (
+                                    <div className="col-span-1 sm:col-span-2 lg:col-span-3 h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent my-1" />
+                                )}
+                            </>
+                        )}
+
                         {/* Official cards */}
                         {filteredOfficial.map((skill) => (
                             <FeaturedSkillCard
@@ -946,7 +1028,7 @@ export default function BrowseSkills() {
                 )}
 
                 {/* ── Empty state ─────────────────────────────────────────── */}
-                {!loading && filteredOfficial.length === 0 && filteredCommunity.length === 0 && filteredOpenClaw.length === 0 && (
+                {!loading && !dbLoading && filteredOfficial.length === 0 && filteredCommunity.length === 0 && filteredOpenClaw.length === 0 && filteredDbSkills.length === 0 && (
                     <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
                         <div className="w-14 h-14 rounded-2xl bg-accent/5 border border-accent/10 flex items-center justify-center">
                             <svg className="w-6 h-6 text-accent/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -958,86 +1040,24 @@ export default function BrowseSkills() {
                     </div>
                 )}
 
-                {/* ──────────────────────────────────────────────────────────
-                     FROM THE COMMUNITY ─ Appwrite DB skills
-                ────────────────────────────────────────────────────────── */}
-                <div className="mt-20">
-                    {/* Section header */}
-                    <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
-                        <div>
-                            {/* Divider rule */}
-                            <div className="flex items-center gap-3 mb-5">
-                                <div className="h-px flex-1 bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent" />
-                                <span className="shrink-0 flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/[0.08] border border-emerald-500/15">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/60" />
-                                    <span className="font-satoshi text-[11px] font-semibold text-emerald-400/70 uppercase tracking-widest">Skill Issue</span>
-                                </span>
-                                <div className="h-px flex-1 bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent" />
-                            </div>
-                            <h2 className="font-clash font-bold text-3xl sm:text-4xl tracking-tight">
-                                From the{' '}
-                                <span className="italic text-emerald-400" style={{ textShadow: '0 0 40px rgba(52,211,153,0.3)' }}>Community</span>
-                            </h2>
-                            <p className="font-satoshi text-white/35 mt-2 text-sm">
-                                Skills created and shared directly by Skill Issue users.
-                            </p>
-                        </div>
-
-                        {/* Sort controls */}
-                        <div className="flex items-center gap-2 shrink-0">
-                            {[['recent', 'Recent'], ['most-rated', 'Top Rated'], ['most-copied', 'Most Copied']].map(([val, label]) => (
-                                <button
-                                    key={val}
-                                    onClick={() => setDbSort(val)}
-                                    className={`px-3 py-1.5 rounded-lg font-satoshi text-xs font-semibold transition-all duration-200 border ${dbSort === val
-                                        ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
-                                        : 'bg-white/[0.02] border-white/[0.06] text-white/35 hover:text-white/55 hover:border-white/15'
-                                        }`}
-                                >
-                                    {label}
-                                </button>
-                            ))}
-                        </div>
+                {/* Sort controls for DB community skills */}
+                {!dbLoading && filteredDbSkills.length > 0 && (
+                    <div className="flex items-center gap-2 mt-4 justify-start">
+                        <span className="font-satoshi text-xs text-white/25 mr-1">Sort community:</span>
+                        {[['recent', 'Recent'], ['most-rated', 'Top Rated'], ['most-copied', 'Most Copied']].map(([val, label]) => (
+                            <button
+                                key={val}
+                                onClick={() => setDbSort(val)}
+                                className={`px-3 py-1.5 rounded-lg font-satoshi text-xs font-semibold transition-all duration-200 border ${dbSort === val
+                                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                                    : 'bg-white/[0.02] border-white/[0.06] text-white/35 hover:text-white/55 hover:border-white/15'
+                                    }`}
+                            >
+                                {label}
+                            </button>
+                        ))}
                     </div>
-
-                    {/* Loading skeleton for DB skills */}
-                    {dbLoading && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {Array.from({ length: 6 }).map((_, i) => (
-                                <SkeletonCard key={i} />
-                            ))}
-                        </div>
-                    )}
-
-                    {/* Community skill cards */}
-                    {!dbLoading && filteredDbSkills.length > 0 && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {filteredDbSkills.map((skill, i) => (
-                                <DbSkillCard
-                                    key={skill.id}
-                                    skill={skill}
-                                    uploaderProfile={dbProfiles[skill.user_id]}
-                                    onClick={setSelectedDbSkill}
-                                    index={i}
-                                />
-                            ))}
-                        </div>
-                    )}
-
-                    {/* Empty state for community section */}
-                    {!dbLoading && filteredDbSkills.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-                            <div className="w-12 h-12 rounded-2xl bg-emerald-500/[0.06] border border-emerald-500/10 flex items-center justify-center">
-                                <svg className="w-5 h-5 text-emerald-400/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
-                                </svg>
-                            </div>
-                            <p className="font-satoshi text-white/20 text-sm">
-                                {searchQuery ? `No community skills match "${searchQuery}"` : 'No community skills yet — be the first!'}
-                            </p>
-                        </div>
-                    )}
-                </div>
+                )}
 
             </div>
 

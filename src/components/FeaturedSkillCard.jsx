@@ -20,10 +20,10 @@ function OfficialCard({ skill, onClick, onDownload, isDownloading }) {
     return (
         <div
             onClick={() => onClick(skill)}
-            className={`group relative bg-gradient-to-b from-navy-50 to-navy border border-white/[0.06] rounded-2xl p-5 hover:border-accent/25 transition-all duration-400 hover:-translate-y-1 flex flex-col gap-4 cursor-pointer ${cc.glow}`}
+            className={`group relative bg-gradient-to-b from-navy-50 to-navy border border-white/[0.06] rounded-2xl p-5 hover:border-emerald-400/25 transition-all duration-400 hover:-translate-y-1 flex flex-col gap-4 cursor-pointer ${cc.glow}`}
         >
             {/* Top edge highlight */}
-            <div className="absolute top-0 left-6 right-6 h-[1px] bg-gradient-to-r from-transparent via-accent/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="absolute top-0 left-6 right-6 h-[1px] bg-gradient-to-r from-transparent via-emerald-400/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
             {/* Header row: avatar + verified */}
             <div className="flex items-center justify-between">
@@ -48,7 +48,7 @@ function OfficialCard({ skill, onClick, onDownload, isDownloading }) {
 
             {/* Skill name */}
             <div className="flex-1 min-w-0">
-                <h3 className="font-clash font-bold text-lg text-white leading-snug mb-1 group-hover:text-accent-light transition-colors duration-300 line-clamp-2">
+                <h3 className="font-clash font-bold text-lg text-white leading-snug mb-1 group-hover:text-emerald-200 transition-colors duration-300 line-clamp-2">
                     {displayName}
                 </h3>
                 <p className="font-satoshi text-sm text-white/35 line-clamp-1">
@@ -87,7 +87,7 @@ function OfficialCard({ skill, onClick, onDownload, isDownloading }) {
                         onDownload(skill)
                     }}
                     disabled={isDownloading}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-accent/[0.06] border border-accent/15 text-accent/80 font-satoshi text-xs font-semibold hover:bg-accent/15 hover:border-accent/30 hover:text-accent hover:shadow-[0_0_12px_rgba(75,169,255,0.12)] transition-all duration-300 disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-500/[0.06] border border-emerald-500/15 text-emerald-300/80 font-satoshi text-xs font-semibold hover:bg-emerald-500/15 hover:border-emerald-500/30 hover:text-emerald-200 hover:shadow-[0_0_12px_rgba(16,185,129,0.12)] transition-all duration-300 disabled:opacity-50"
                 >
                     {isDownloading ? (
                         <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">

@@ -237,7 +237,7 @@ function TestimonialModal({ onClose, authUser }) {
 //  MAIN PAGE COMPONENT
 // ═══════════════════════════════════════════════════════
 export default function SkillBuilder() {
-    const { isLoggedIn, openAuthModal, authUser } = useAuth()
+    const { isLoggedIn, openAuthModal, user: authUser } = useAuth()
 
     // Form state
     const [skillName, setSkillName] = useState('')

@@ -193,13 +193,13 @@ export async function isUsernameAvailable(username) {
 }
 
 /** Create a new public profile row linked to Appwrite auth user. */
-export async function createProfile({ id, username, email, avatar_url }) {
+export async function createProfile({ id, username, email, avatar_url, display_name }) {
     requireAppwrite()
     const data = await databases.createDocument(
         DATABASE_ID,
         USERS_TABLE_ID,
         ID.unique(),
-        { user_id: id, username, email: email ?? null, avatar_url: avatar_url ?? null },
+        { user_id: id, username, email: email ?? null, avatar_url: avatar_url ?? null, display_name: display_name ?? null },
         [
             Permission.read(Role.any()),                 // profiles are publicly readable
             Permission.update(Role.user(id)),            // only owner can edit
