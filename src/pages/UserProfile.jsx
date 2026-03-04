@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { Package, Copy, Download, Star, UserX, Sprout } from 'lucide-react'
+import { Package, Star, UserX, Sprout } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { getProfileByUsername, getProfileStats, getSavedSkills, submitTestimonial, hasSubmittedTestimonial } from '../lib/userService'
 import { getPublicSkillsByUser, getPrivateSkillsByUser, toggleVisibility, deleteSkill } from '../lib/skillService'
@@ -29,29 +29,28 @@ function AnimatedNumber({ value, duration = 1200 }) {
     return display
 }
 
-// ── Stat chip — premium glass card ─────────────────────────
+// ── Stat chip — modern inline pill ─────────────────────────
 function StatChip({ label, value, icon, delay = 0 }) {
     return (
         <div
-            className="profile-stat-card group relative overflow-hidden"
+            className="group flex items-center gap-4 px-5 py-4 rounded-2xl bg-navy-50/40 border border-white/[0.06] hover:border-accent/25 hover:bg-navy-100/60 transition-all duration-300 backdrop-blur-sm"
             style={{ animationDelay: `${delay}ms` }}
         >
-            {/* Gradient border glow on hover */}
-            <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-accent/20 via-transparent to-accent/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            {/* Icon container */}
+            <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-accent/8 border border-accent/15 flex items-center justify-center group-hover:bg-accent/15 group-hover:border-accent/30 transition-all duration-300">
+                {icon}
+            </div>
 
-            {/* Inner content */}
-            <div className="relative flex flex-col items-center gap-1 px-5 py-5 rounded-2xl bg-gradient-to-br from-navy-100/80 to-navy/90 border border-white/[0.06] group-hover:border-accent/30 backdrop-blur-sm transition-all duration-500">
-                {/* Ambient glow dot */}
-                <div className="absolute top-3 right-3 w-1.5 h-1.5 rounded-full bg-accent/30 group-hover:bg-accent/60 group-hover:shadow-[0_0_8px_rgba(75,169,255,0.5)] transition-all duration-500" />
-
-                <span className="text-2xl mb-1 drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)] group-hover:scale-110 transition-transform duration-300">{icon}</span>
-
-                <span className="font-clash font-medium text-3xl text-white group-hover:text-accent transition-colors duration-300" style={{ textShadow: '0 0 30px rgba(75, 169, 255, 0)' }}>
+            {/* Text */}
+            <div className="flex flex-col">
+                <span className="font-clash font-semibold text-2xl text-white leading-none">
                     <AnimatedNumber value={value} />
                 </span>
-
-                <span className="font-satoshi text-[10px] text-white/25 uppercase tracking-[0.2em] font-medium">{label}</span>
+                <span className="font-satoshi text-xs text-white/35 uppercase tracking-[0.15em] mt-0.5">{label}</span>
             </div>
+
+            {/* Subtle right accent */}
+            <div className="ml-auto w-1 h-8 rounded-full bg-accent/0 group-hover:bg-accent/30 transition-all duration-300" />
         </div>
     )
 }
@@ -461,17 +460,15 @@ export default function UserProfile() {
                         <div className="flex-1 min-w-0 space-y-10">
 
                             {/* Stats bar */}
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div className="grid grid-cols-2 gap-3">
                                 {loading || !stats ? (
-                                    Array(4).fill(0).map((_, i) => (
-                                        <div key={i} className="h-28 rounded-2xl bg-navy-50/50 border border-white/[0.04] animate-pulse" />
+                                    Array(2).fill(0).map((_, i) => (
+                                        <div key={i} className="h-[68px] rounded-2xl bg-navy-50/50 border border-white/[0.04] animate-pulse" />
                                     ))
                                 ) : (
                                     <>
-                                        <StatChip icon={<Package className="w-6 h-6 text-accent/80" />} label="Skills" value={stats.total_skills} delay={0} />
-                                        <StatChip icon={<Copy className="w-6 h-6 text-accent/80" />} label="Copies" value={stats.total_copies} delay={80} />
-                                        <StatChip icon={<Download className="w-6 h-6 text-accent/80" />} label="Downloads" value={stats.total_downloads} delay={160} />
-                                        <StatChip icon={<Star className="w-6 h-6 text-accent/80" />} label="Stars" value={stats.total_stars} delay={240} />
+                                        <StatChip icon={<Package className="w-4 h-4 text-accent/80" />} label="Skills" value={stats.total_skills} delay={0} />
+                                        <StatChip icon={<Star className="w-4 h-4 text-accent/80" />} label="Stars" value={stats.total_stars} delay={80} />
                                     </>
                                 )}
                             </div>
