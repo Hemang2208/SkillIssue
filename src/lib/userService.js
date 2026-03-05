@@ -180,6 +180,17 @@ export async function getSavedSkills(profileId) {
     return res.documents.map(normalise)
 }
 
+/** Fetch saved skills when you already have the skill-ID list (avoids extra profile re-fetch). */
+export async function getSavedSkillsByIds(skillIds) {
+    if (!skillIds || skillIds.length === 0) return []
+    requireAppwrite()
+    const res = await databases.listDocuments(DATABASE_ID, SKILLS_TABLE_ID, [
+        Query.equal('$id', skillIds),
+        Query.limit(100)
+    ])
+    return res.documents.map(normalise)
+}
+
 
 /** Returns true if the username is not taken. */
 export async function isUsernameAvailable(username) {
@@ -248,8 +259,34 @@ export async function getAllUsers({ limit = 50, cursor = null } = {}) {
     }
 }
 
-/** Fetch aggregated per-user stats (skills count + total stars) from public skills in one query. */
-export async function getPublicSkillsStatsByUser() {
+// ── Community page: only fetch fields displayed on each user card. ─────────
+// Omits saved_skills[], email, and any other heavy fields.
+const COMMUNITY_USER_FIELDS = ['$id', '$createdAt', 'user_id', 'username', 'display_name', 'avatar_url', 'bio']
+
+export async function getCommunityUsers({ limit = 12, cursor = null } = {}) {
+    requireAppwrite()
+    const queries = [
+        Query.orderDesc('$createdAt'),
+        Query.limit(limit),
+        Query.select(COMMUNITY_USER_FIELDS),
+    ]
+    if (cursor) queries.push(Query.cursorAfter(cursor))
+    const res = await databases.listDocuments(DATABASE_ID, USERS_TABLE_ID, queries)
+    return {
+        users: res.documents.map(normalise),
+        total: res.total,
+    }
+}
+
+// ── 5-minute in-memory cache for skill stats (avoids re-fetching on tab switch) ──
+let _skillStatsCache = null // { stats: {}, expiresAt: number }
+
+/** Fetch aggregated per-user stats (skills count + total stars) from public skills in one query.
+ *  Result is cached for 5 minutes; pass force=true to bypass cache. */
+export async function getPublicSkillsStatsByUser({ force = false } = {}) {
+    if (!force && _skillStatsCache && Date.now() < _skillStatsCache.expiresAt) {
+        return _skillStatsCache.stats
+    }
     requireAppwrite()
     try {
         const res = await databases.listDocuments(
@@ -257,7 +294,7 @@ export async function getPublicSkillsStatsByUser() {
             SKILLS_TABLE_ID,
             [
                 Query.equal('visibility', 'public'),
-                Query.limit(250),
+                Query.limit(500),           // raised from 250 to cover larger communities
                 Query.select(['user_id', 'star_count']),
             ]
         )
@@ -267,6 +304,7 @@ export async function getPublicSkillsStatsByUser() {
             stats[doc.user_id].skills += 1
             stats[doc.user_id].stars += (doc.star_count || 0)
         }
+        _skillStatsCache = { stats, expiresAt: Date.now() + 5 * 60 * 1000 }
         return stats
     } catch {
         return {}

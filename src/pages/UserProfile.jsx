@@ -1,12 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { Package, Star, UserX, Sprout } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { getProfileByUsername, getProfileStats, getSavedSkills, submitTestimonial, hasSubmittedTestimonial } from '../lib/userService'
+import { getProfileByUsername, getProfileStats, getSavedSkills, getSavedSkillsByIds, submitTestimonial, hasSubmittedTestimonial } from '../lib/userService'
 import { getPublicSkillsByUser, getPrivateSkillsByUser, toggleVisibility, deleteSkill } from '../lib/skillService'
 import SkillCard from '../components/SkillCard'
 import EditProfileModal from '../components/EditProfileModal'
 import UserSkillModal from '../components/UserSkillModal'
+import { profileCache, invalidateProfileCache, CACHE_TTL, isCacheStale } from '../lib/profileCache'
+
+const PAGE_SIZE = 12
 
 // ── Animated counter ───────────────────────────────────────
 function AnimatedNumber({ value, duration = 1200 }) {
@@ -174,6 +177,8 @@ export default function UserProfile() {
     const [profile, setProfile] = useState(null)
     const [stats, setStats] = useState(null)
     const [publicSkills, setPublic] = useState([])
+    const [skillsTotal, setSkillsTotal] = useState(0)
+    const [loadingMore, setLoadingMore] = useState(false)
     const [privateSkills, setPrivate] = useState([])
     const [savedSkills, setSavedSkills] = useState([])
     const [filter, setFilter] = useState('recent')
@@ -183,14 +188,18 @@ export default function UserProfile() {
     const [showEdit, setShowEdit] = useState(false)
     const [showReviewModal, setShowReviewModal] = useState(false)
     const [hasReviewed, setHasReviewed] = useState(false)
+    const [imgError, setImgError] = useState(false)
 
     const isOwner = authProfile?.username === username
 
-    // ── Fetch profile + stats ─────────────────────────────────
+    // ── Fetch profile + skills (parallelised) ─────────────────
     useEffect(() => {
         async function load() {
             setLoading(true)
             setNotFound(false)
+            setPublic([])
+            setSkillsTotal(0)
+
             try {
                 // Mock mode — use the auth context profile directly
                 if (isMockMode) {
@@ -202,6 +211,7 @@ export default function UserProfile() {
                             { id: 'mock-2', title: 'Technical Writing Assistant', description: 'Helps write clear documentation and blog posts', category: 'writing', tags: ['docs'], star_count: 2, copy_count: 3, created_at: new Date(Date.now() - 86400000).toISOString() },
                             { id: 'mock-3', title: 'Code Review Analyzer', description: 'Analyzes PRs and suggests improvements', category: 'analysis', tags: ['review'], star_count: 1, copy_count: 1, created_at: new Date(Date.now() - 172800000).toISOString() },
                         ])
+                        setSkillsTotal(3)
                         setPrivate([
                             { id: 'mock-priv-1', title: 'Secret Project Helper', category: 'coding', tags: [], created_at: new Date().toISOString() },
                         ])
@@ -215,32 +225,66 @@ export default function UserProfile() {
                     return
                 }
 
-                // Real mode — fetch from Supabase
+                // ── Check in-memory cache ──────────────────────────────
+                const cached = profileCache[username]
+                if (cached && !isCacheStale(username)) {
+                    console.log('[Profile] Cache hit for', username)
+                    setProfile(cached.profile)
+                    setStats(cached.stats)
+                    setPublic(cached.publicSkills)
+                    setSkillsTotal(cached.skillsTotal)
+                    setHasReviewed(cached.hasReviewed)
+                    if (cached.privateSkills) setPrivate(cached.privateSkills)
+                    if (cached.savedSkills) setSavedSkills(cached.savedSkills)
+                    setLoading(false)
+                    return
+                }
+
+                // ── Step 1: fetch profile (needed to get user_id for everything else) ──
+                const t0 = performance.now()
                 const p = await getProfileByUsername(username)
+                console.log(`[Profile] getProfileByUsername: ${(performance.now() - t0).toFixed(0)}ms`)
+
                 if (!p) { setNotFound(true); setLoading(false); return }
                 setProfile(p)
 
-                const [s, pub, reviewedStatus] = await Promise.all([
-                    getProfileStats(p.user_id),
-                    getPublicSkillsByUser(p.user_id, filter),
-                    hasSubmittedTestimonial(p.user_id)
-                ])
-                setStats(s)
-                setPublic(pub)
-                setHasReviewed(reviewedStatus)
+                // ── Step 2: fan-out — run all remaining calls in parallel ──
+                const savedIds = p.saved_skills || []
+                const t1 = performance.now()
 
-                if (isOwner) {
-                    const [priv, saved] = await Promise.all([
-                        getPrivateSkillsByUser(p.user_id),
-                        getSavedSkills(p.id)
-                    ])
-                    setPrivate(priv)
-                    setSavedSkills(saved)
-                } else if (!isMockMode) {
-                    // Show saved skills if they exist on the profile (if they are public? Wait, we can always show them or only to owner)
-                    const saved = await getSavedSkills(p.id)
-                    setSavedSkills(saved)
+                const parallelCalls = [
+                    getProfileStats(p.user_id),                              // [0] stats
+                    getPublicSkillsByUser(p.user_id, filter, PAGE_SIZE, 0), // [1] first page of public skills
+                    hasSubmittedTestimonial(p.user_id),                      // [2] reviewed?
+                    getSavedSkillsByIds(savedIds),                           // [3] saved skills (no extra round-trip)
+                    ...(isOwner ? [getPrivateSkillsByUser(p.user_id)] : []), // [4] private skills (owner only)
+                ]
+
+                const results = await Promise.all(parallelCalls)
+
+                console.log(`[Profile] parallel fetch (stats+skills+review+saved${isOwner ? '+private' : ''}): ${(performance.now() - t1).toFixed(0)}ms`)
+
+                const [s, pubResult, reviewedStatus, saved, priv] = results
+
+                setStats(s)
+                setPublic(pubResult.docs)
+                setSkillsTotal(pubResult.total)
+                setHasReviewed(reviewedStatus)
+                setSavedSkills(saved)
+                if (isOwner && priv) setPrivate(priv)
+
+                // ── Populate cache ────────────────────────────────────
+                profileCache[username] = {
+                    cachedAt: Date.now(),
+                    profile: p,
+                    stats: s,
+                    publicSkills: pubResult.docs,
+                    skillsTotal: pubResult.total,
+                    hasReviewed: reviewedStatus,
+                    savedSkills: saved,
+                    ...(isOwner ? { privateSkills: priv } : {}),
                 }
+
             } catch (err) {
                 console.error('Profile load error:', err)
             } finally {
@@ -250,53 +294,102 @@ export default function UserProfile() {
         load()
     }, [username, isOwner, isMockMode, authProfile])
 
-    // ── Re-fetch public skills when filter changes ────────────
+    // ── Re-fetch page 1 of public skills when filter changes ──
     useEffect(() => {
         if (!profile) return
-        getPublicSkillsByUser(profile.user_id, filter).then(setPublic)
+        const t = performance.now()
+        getPublicSkillsByUser(profile.user_id, filter, PAGE_SIZE, 0).then(({ docs, total }) => {
+            console.log(`[Profile] filter re-fetch (${filter}): ${(performance.now() - t).toFixed(0)}ms`)
+            setPublic(docs)
+            setSkillsTotal(total)
+            invalidateProfileCache(username)
+        })
     }, [filter, profile])
 
+    // ── Load next page of public skills ──────────────────────
+    const handleLoadMore = useCallback(async () => {
+        if (!profile || loadingMore) return
+        setLoadingMore(true)
+        const t = performance.now()
+        try {
+            const { docs } = await getPublicSkillsByUser(profile.user_id, filter, PAGE_SIZE, publicSkills.length)
+            console.log(`[Profile] load more (offset=${publicSkills.length}): ${(performance.now() - t).toFixed(0)}ms`)
+            setPublic(prev => {
+                const merged = [...prev, ...docs]
+                invalidateProfileCache(username)
+                return merged
+            })
+        } finally {
+            setLoadingMore(false)
+        }
+    }, [profile, filter, publicSkills.length, loadingMore, username])
+
     // ── Make private skill public ─────────────────────────────
-    async function handleMakePublic(skillId) {
+    const handleMakePublic = useCallback(async (skillId) => {
         await toggleVisibility(skillId, 'public')
+        const [pub, s] = await Promise.all([
+            getPublicSkillsByUser(profile.user_id, filter, PAGE_SIZE, 0),
+            getProfileStats(profile.user_id),
+        ])
         setPrivate(prev => prev.filter(s => s.id !== skillId))
-        const pub = await getPublicSkillsByUser(profile.user_id, filter)
-        setPublic(pub)
-        const s = await getProfileStats(profile.user_id)
+        setPublic(pub.docs)
+        setSkillsTotal(pub.total)
         setStats(s)
-    }
+        invalidateProfileCache(username)
+    }, [profile, filter, username])
 
-    async function handleMakePrivate(skillId) {
+    const handleMakePrivate = useCallback(async (skillId) => {
         await toggleVisibility(skillId, 'private')
+        const [priv, s] = await Promise.all([
+            getPrivateSkillsByUser(profile.user_id),
+            getProfileStats(profile.user_id),
+        ])
         setPublic(prev => prev.filter(s => s.id !== skillId))
-        const priv = await getPrivateSkillsByUser(profile.user_id)
         setPrivate(priv)
-        const s = await getProfileStats(profile.user_id)
         setStats(s)
-    }
+        invalidateProfileCache(username)
+    }, [profile, username])
 
-    async function handleDelete(skillId) {
+    const handleDelete = useCallback(async (skillId) => {
         await deleteSkill(skillId)
-        setPublic(prev => prev.filter(s => s.id !== skillId))
+        const [pub, s] = await Promise.all([
+            getPublicSkillsByUser(profile.user_id, filter, PAGE_SIZE, 0),
+            getProfileStats(profile.user_id),
+        ])
+        setPublic(pub.docs)
+        setSkillsTotal(pub.total)
         setPrivate(prev => prev.filter(s => s.id !== skillId))
-        const s = await getProfileStats(profile.user_id)
         setStats(s)
-    }
+        invalidateProfileCache(username)
+    }, [profile, filter, username])
 
     // ── Handle modal skill actions (toggle/delete from modal) ──
-    async function handleModalToggle(skillId, newVisibility) {
+    const handleModalToggle = useCallback(async (skillId, newVisibility) => {
         await toggleVisibility(skillId, newVisibility)
-        const [pub, priv] = await Promise.all([
-            getPublicSkillsByUser(profile.user_id, filter),
+        const [pub, priv, s] = await Promise.all([
+            getPublicSkillsByUser(profile.user_id, filter, PAGE_SIZE, 0),
             getPrivateSkillsByUser(profile.user_id),
+            getProfileStats(profile.user_id),
         ])
-        setPublic(pub)
+        setPublic(pub.docs)
+        setSkillsTotal(pub.total)
         setPrivate(priv)
-        const s = await getProfileStats(profile.user_id)
         setStats(s)
-    }
+        invalidateProfileCache(username)
+    }, [profile, filter, username])
 
-    // ── Not found ─────────────────────────────────────────────
+    // ── Derived display values (memoised) ─────────────────────
+    const displayName = useMemo(() => profile?.display_name || profile?.username || username, [profile, username])
+    const avatarUrl = useMemo(() => profile?.avatar_url || authUser?.user_metadata?.avatar_url || null, [profile, authUser])
+    const joinedDate = useMemo(() =>
+        profile?.created_at
+            ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+            : null,
+        [profile]
+    )
+    // Reset imgError whenever the avatarUrl changes (e.g. after profile edit)
+    useEffect(() => { setImgError(false) }, [avatarUrl])
+
     if (!loading && notFound) {
         return (
             <main className="min-h-[80vh] flex flex-col items-center justify-center px-6 text-center">
@@ -314,15 +407,6 @@ export default function UserProfile() {
             </main>
         )
     }
-
-    const displayName = profile?.display_name || profile?.username || username
-    const avatarUrl = profile?.avatar_url || authUser?.user_metadata?.avatar_url || null
-    const joinedDate = profile?.created_at
-        ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-        : null
-    const [imgError, setImgError] = useState(false)
-    // Reset imgError whenever the avatarUrl changes (e.g. after profile edit)
-    useEffect(() => { setImgError(false) }, [avatarUrl])
 
     return (
         <>
@@ -484,7 +568,7 @@ export default function UserProfile() {
                                         </h2>
                                         {!loading && (
                                             <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-accent/10 border border-accent/15 font-satoshi font-bold text-xs text-accent/80">
-                                                {publicSkills.length}
+                                                {skillsTotal}
                                             </span>
                                         )}
                                     </div>
@@ -537,19 +621,42 @@ export default function UserProfile() {
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        {publicSkills.map((skill, i) => (
-                                            <SkillCard
-                                                key={skill.id}
-                                                skill={skill}
-                                                index={i}
-                                                onClick={setSelectedSkill}
-                                                isOwner={isOwner}
-                                                onDelete={isOwner ? handleDelete : undefined}
-                                                onMakePrivate={isOwner ? handleMakePrivate : undefined}
-                                            />
-                                        ))}
-                                    </div>
+                                    <>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            {publicSkills.map((skill, i) => (
+                                                <SkillCard
+                                                    key={skill.id}
+                                                    skill={skill}
+                                                    index={i}
+                                                    onClick={setSelectedSkill}
+                                                    isOwner={isOwner}
+                                                    onDelete={isOwner ? handleDelete : undefined}
+                                                    onMakePrivate={isOwner ? handleMakePrivate : undefined}
+                                                />
+                                            ))}
+                                        </div>
+                                        {publicSkills.length < skillsTotal && (
+                                            <div className="flex justify-center mt-6">
+                                                <button
+                                                    onClick={handleLoadMore}
+                                                    disabled={loadingMore}
+                                                    className="flex items-center gap-2 px-6 py-3 rounded-xl border border-accent/20 bg-accent/[0.06] text-accent font-satoshi text-sm font-semibold hover:bg-accent/[0.12] hover:border-accent/35 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    {loadingMore ? (
+                                                        <>
+                                                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                                                            </svg>
+                                                            Loading…
+                                                        </>
+                                                    ) : (
+                                                        <>Load more <span className="text-accent/50 font-normal">({skillsTotal - publicSkills.length} remaining)</span></>
+                                                    )}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                             </section>
 
@@ -571,7 +678,7 @@ export default function UserProfile() {
                                                 key={skill.id}
                                                 skill={skill}
                                                 index={i}
-                                                onClick={setSelectedSkill}
+                                                onClick={(s) => setSelectedSkill({ ...s, _savedByMe: true })}
                                             />
                                         ))}
                                     </div>
@@ -645,7 +752,11 @@ export default function UserProfile() {
                 <EditProfileModal
                     profile={profile}
                     onClose={() => setShowEdit(false)}
-                    onSave={updated => setProfile(prev => ({ ...prev, ...updated }))}
+                    onSave={updated => {
+                        setProfile(prev => ({ ...prev, ...updated }))
+                        // Bust cache so re-visiting the profile re-fetches fresh data
+                        invalidateProfileCache(username)
+                    }}
                 />
             )}
 
@@ -654,9 +765,9 @@ export default function UserProfile() {
                 <UserSkillModal
                     skill={selectedSkill}
                     onClose={() => setSelectedSkill(null)}
-                    isOwner={isOwner}
-                    onDelete={async (id) => { await handleDelete(id) }}
-                    onTogglePrivate={handleModalToggle}
+                    isOwner={!selectedSkill._savedByMe && selectedSkill.user_id === authUser?.$id}
+                    onDelete={!selectedSkill._savedByMe && selectedSkill.user_id === authUser?.$id ? async (id) => { await handleDelete(id) } : undefined}
+                    onTogglePrivate={!selectedSkill._savedByMe && selectedSkill.user_id === authUser?.$id ? handleModalToggle : undefined}
                 />
             )}
             {showReviewModal && (

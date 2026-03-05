@@ -381,23 +381,22 @@ export function fetchAllFeaturedSkills() {
 // ── Download skill as .zip ─────────────────────────────────────────────
 export async function downloadSkillAsZip(repo, folderPath, skillName) {
     const files = await fetchSkillFiles(repo, folderPath)
-    const mdFiles = files.filter((f) => f.name.toLowerCase().endsWith('.md'))
+    const downloadableFiles = files.filter((f) => f.type !== 'dir')
 
-    if (mdFiles.length === 0) throw new Error('No .md files found in this skill.')
+    if (downloadableFiles.length === 0) throw new Error('No files found in this skill.')
 
-    // Fetch all .md file contents in parallel using path-based fetch
-    // (avoids null download_url which GitHub omits for large repos)
+    // Fetch all file contents in parallel
     const contents = await Promise.all(
-        mdFiles.map(async (f) => {
+        downloadableFiles.map(async (f) => {
             const text = await fetchFileContentByPath(repo, f.path)
             return { name: f.name, text }
         })
     )
 
-    // Build zip
+    // Build zip — files go at root so extracting skillName.zip gives
+    // one clean folder (skillName/) from the OS, not a nested one
     const zip = new JSZip()
-    const folder = zip.folder(skillName)
-    contents.forEach(({ name, text }) => folder.file(name, text))
+    contents.forEach(({ name, text }) => zip.file(name, text))
 
     const blob = await zip.generateAsync({ type: 'blob' })
 

@@ -79,8 +79,9 @@ export async function getUserSkills() {
     return res.documents.map(normalise)
 }
 
-/** Fetch all PUBLIC skills for a given user, with optional sort. */
-export async function getPublicSkillsByUser(userId, sort = 'recent') {
+/** Fetch PUBLIC skills for a given user with optional sort and pagination.
+ *  Returns { docs: SkillDoc[], total: number } */
+export async function getPublicSkillsByUser(userId, sort = 'recent', limit = 12, offset = 0) {
     requireAppwrite()
     const sortQuery = {
         'recent': Query.orderDesc('$createdAt'),
@@ -88,17 +89,20 @@ export async function getPublicSkillsByUser(userId, sort = 'recent') {
         'most-copied': Query.orderDesc('copy_count'),
     }[sort] ?? Query.orderDesc('$createdAt')
 
+    const queries = [
+        Query.equal('user_id', userId),
+        Query.equal('visibility', 'public'),
+        sortQuery,
+        Query.limit(limit),
+    ]
+    if (offset > 0) queries.push(Query.offset(offset))
+
     const res = await databases.listDocuments(
         DATABASE_ID,
         SKILLS_TABLE_ID,
-        [
-            Query.equal('user_id', userId),
-            Query.equal('visibility', 'public'),
-            sortQuery,
-            Query.limit(100),
-        ]
+        queries
     )
-    return res.documents.map(normalise)
+    return { docs: res.documents.map(normalise), total: res.total }
 }
 
 /** Fetch ALL public skills across all users (for the community browse section). */

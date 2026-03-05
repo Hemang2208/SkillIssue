@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useAuth } from '../context/AuthContext'
 import { saveSkill } from '../lib/skillService'
+import { invalidateProfileCache } from '../lib/profileCache'
 import { submitTestimonial } from '../lib/userService'
 import TextareaAutosize from 'react-textarea-autosize'
 
@@ -237,7 +238,7 @@ function TestimonialModal({ onClose, authUser }) {
 //  MAIN PAGE COMPONENT
 // ═══════════════════════════════════════════════════════
 export default function SkillBuilder() {
-    const { isLoggedIn, openAuthModal, user: authUser } = useAuth()
+    const { isLoggedIn, openAuthModal, user: authUser, profile: authProfile } = useAuth()
 
     // Form state
     const [skillName, setSkillName] = useState('')
@@ -422,6 +423,7 @@ export default function SkillBuilder() {
                 visibility,
             })
             setSavedAs(visibility)
+            invalidateProfileCache(authProfile?.username)
             setToast(`Skill saved as ${visibility}! ✓`)
 
             if (result.isFirstSkill) {

@@ -1,10 +1,14 @@
 import { useState, useEffect, useCallback, useRef, Fragment } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import JSZip from 'jszip'
 import { useAuth } from '../context/AuthContext'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
-    fetchAllFeaturedSkills,
+    fetchSkillFolders,
+    fetchOpenClawSkills,
+    fetchCommunityFlatSkills,
+    fetchRepoStars,
     fetchSkillFiles,
     fetchFileContentByPath,
     downloadSkillAsZip,
@@ -16,6 +20,7 @@ import {
 import FeaturedSkillCard from '../components/FeaturedSkillCard'
 import { saveSkill, getAllPublicSkills } from '../lib/skillService'
 import { toggleSavedSkill, getProfilesByUserIds } from '../lib/userService'
+import { invalidateProfileCache } from '../lib/profileCache'
 import UserSkillModal from '../components/UserSkillModal'
 
 // ── Skeleton loader ─────────────────────────────────────────────────────
@@ -39,6 +44,157 @@ function SkeletonCard() {
     )
 }
 
+// ── splitMarkdown helper ────────────────────────────────────────────────
+// Splits markdown into a short preview (first 2 paragraph-blocks) and the rest.
+function splitMarkdown(md = '') {
+    const blocks = md.split(/\n{2,}/)
+    const preview = blocks.slice(0, 2).join('\n\n')
+    const rest = blocks.slice(2).join('\n\n')
+    return { preview, rest }
+}
+
+// ── File-type helpers ────────────────────────────────────────────────────
+function fileColor(name) {
+    const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : ''
+    if (ext === 'md') return 'text-accent'
+    if (ext === 'json') return 'text-yellow-400/80'
+    if (name.toUpperCase() === 'LICENSE' || ext === 'txt') return 'text-white/30'
+    if (ext === 'yml' || ext === 'yaml') return 'text-orange-400/70'
+    if (ext === 'js' || ext === 'ts' || ext === 'jsx' || ext === 'tsx') return 'text-emerald-400/80'
+    return 'text-white/50'
+}
+
+function FileIcon({ name, type }) {
+    if (type === 'dir') return (
+        <svg className="w-3.5 h-3.5 text-violet-400/70 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+        </svg>
+    )
+    const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : ''
+    if (ext === 'md') return (
+        <svg className="w-3.5 h-3.5 text-accent/70 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+        </svg>
+    )
+    if (ext === 'json') return (
+        <svg className="w-3.5 h-3.5 text-yellow-400/60 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+        </svg>
+    )
+    return (
+        <svg className="w-3.5 h-3.5 text-white/25 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+        </svg>
+    )
+}
+
+function FileTree({ items, rootName, repo, activeFile, onFileClick }) {
+    const [expandedDirs, setExpandedDirs] = useState(() => new Set())
+    const sorted = [...items].sort((a, b) => {
+        if (a.type === b.type) return a.name.localeCompare(b.name)
+        return a.type === 'dir' ? -1 : 1
+    })
+    function toggleDir(path) {
+        setExpandedDirs(prev => {
+            const next = new Set(prev)
+            next.has(path) ? next.delete(path) : next.add(path)
+            return next
+        })
+    }
+    return (
+        <div className="font-mono text-sm select-none">
+            {/* Root folder row */}
+            <div className="flex items-center gap-2 px-2 py-1.5 text-violet-300/60">
+                <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+                </svg>
+                <span className="text-[12px] text-white/50">{rootName}</span>
+            </div>
+            {sorted.map(item => (
+                <FileRow
+                    key={item.path}
+                    item={item}
+                    depth={1}
+                    repo={repo}
+                    activeFile={activeFile}
+                    expandedDirs={expandedDirs}
+                    onToggleDir={toggleDir}
+                    onFileClick={onFileClick}
+                />
+            ))}
+        </div>
+    )
+}
+
+function FileRow({ item, depth, repo, activeFile, expandedDirs, onToggleDir, onFileClick }) {
+    const isDir = item.type === 'dir'
+    const isActive = activeFile?.path === item.path
+    const isExpanded = expandedDirs.has(item.path)
+    const [subItems, setSubItems] = useState(null)
+
+    async function handleDirClick() {
+        onToggleDir(item.path)
+        if (!subItems) {
+            try {
+                const res = await fetch(`https://api.github.com/repos/${repo}/contents/${item.path}`)
+                const data = await res.json()
+                if (Array.isArray(data)) setSubItems(data.sort((a, b) => {
+                    if (a.type === b.type) return a.name.localeCompare(b.name)
+                    return a.type === 'dir' ? -1 : 1
+                }))
+            } catch { setSubItems([]) }
+        }
+    }
+
+    return (
+        <>
+            <div
+                onClick={isDir ? handleDirClick : () => onFileClick(item)}
+                className={`flex items-center gap-1.5 px-2 py-[5px] rounded-md cursor-pointer transition-colors duration-150 group
+                    ${isActive ? 'bg-accent/10 text-accent' : 'hover:bg-white/[0.04] text-white/50 hover:text-white/80'}`}
+                style={{ paddingLeft: `${depth * 16}px` }}
+            >
+                {isDir ? (
+                    <svg
+                        className={`w-3 h-3 shrink-0 text-white/20 transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}`}
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                    >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                    </svg>
+                ) : (
+                    <span className="w-3 shrink-0" />
+                )}
+                <FileIcon name={item.name} type={item.type} />
+                <span className={`text-[12px] leading-none truncate ${isActive ? 'text-accent' : isDir ? 'text-violet-300/60 group-hover:text-violet-200/80' : fileColor(item.name)}`}>
+                    {item.name}
+                </span>
+                {!isDir && (
+                    <span className="ml-auto text-[10px] text-white/15 shrink-0">
+                        {item.size > 1024 ? `${(item.size / 1024).toFixed(1)}k` : `${item.size}b`}
+                    </span>
+                )}
+            </div>
+            {isDir && isExpanded && subItems && subItems.map(child => (
+                <FileRow
+                    key={child.path}
+                    item={child}
+                    depth={depth + 1}
+                    repo={repo}
+                    activeFile={activeFile}
+                    expandedDirs={expandedDirs}
+                    onToggleDir={onToggleDir}
+                    onFileClick={onFileClick}
+                />
+            ))}
+            {isDir && isExpanded && !subItems && (
+                <div style={{ paddingLeft: `${(depth + 1) * 16 + 22}px` }} className="py-1.5 text-[11px] text-white/20">
+                    Loading…
+                </div>
+            )}
+        </>
+    )
+}
+
 // Module-level: persists the last-used size for the whole browser session
 // so closing and reopening a different skill remembers your preferred size.
 let _cachedModalSize = null
@@ -54,10 +210,19 @@ function SkillModal({ skill, onClose, authUser, authProfile }) {
     const [copied, setCopied] = useState(false)
     const [linkCopied, setLinkCopied] = useState(false)
     const [downloading, setDownloading] = useState(false)
-    const [viewMode, setViewMode] = useState('rendered') // 'rendered' | 'raw'
-    const [saving, setSaving] = useState(false)       // save-to-library state
-    const [saved, setSaved] = useState(false)          // brief ✓ flash
-    const [saveError, setSaveError] = useState(null)   // duplicate / error message
+    const [viewMode, setViewMode] = useState('rendered') // 'files' | 'rendered' | 'raw'
+    const [saving, setSaving] = useState(false)
+    const [saved, setSaved] = useState(false)
+    const [saveError, setSaveError] = useState(null)
+    // ── Files view state ──────────────────────────────────────────────────
+    const [skillFiles, setSkillFiles] = useState([])       // raw folder items for tree
+    const [activeFile, setActiveFile] = useState(null)     // file selected in tree
+    const [activeContent, setActiveContent] = useState(null) // content of selected file
+    const [fileLoading, setFileLoading] = useState(false)
+
+    // ── Auth ─────────────────────────────────────────────────────────────
+    const { signIn } = useAuth()
+    const isGuest = !authUser
 
     // ── Resize state ──────────────────────────────────────────────────────
     const MIN_W = 480
@@ -106,6 +271,15 @@ function SkillModal({ skill, onClose, authUser, authProfile }) {
         setLoading(true)
         setError(null)
         setViewMode('rendered') // reset to rendered view on each new skill
+        setSkillFiles([])
+        setActiveFile(null)
+        setActiveContent(null)
+
+        // Fetch raw folder listing for the file tree (non-fatal)
+        fetch(`https://api.github.com/repos/${skill.repo}/contents/${skill.path}`)
+            .then(r => r.json())
+            .then(items => { if (Array.isArray(items)) setSkillFiles(items) })
+            .catch(() => {})
 
         fetchSkillFiles(skill.repo, skill.path)
             .then((files) => {
@@ -128,10 +302,26 @@ function SkillModal({ skill, onClose, authUser, authProfile }) {
     }, [onClose])
 
     async function handleCopy() {
-        if (!content) return
-        await navigator.clipboard.writeText(content)
+        const src = activeContent || content
+        if (!src) return
+        await navigator.clipboard.writeText(src)
         setCopied(true)
         setTimeout(() => setCopied(false), 2000)
+    }
+
+    async function handleFileClick(file) {
+        setActiveFile(file)
+        setActiveContent(null)
+        setFileLoading(true)
+        setViewMode('raw')
+        try {
+            const text = await fetchFileContentByPath(skill.repo, file.path)
+            setActiveContent(text)
+        } catch {
+            setActiveContent(`// Could not load ${file.name}`)
+        } finally {
+            setFileLoading(false)
+        }
     }
 
     async function handleShare() {
@@ -178,6 +368,7 @@ function SkillModal({ skill, onClose, authUser, authProfile }) {
                 await toggleSavedSkill(authProfile.id, newSkill.id, 'save')
             }
             setSaved(true)
+            invalidateProfileCache(authProfile?.username)
             setTimeout(() => setSaved(false), 2500)
         } catch (err) {
             setSaveError(err.message || 'Failed to save')
@@ -291,32 +482,129 @@ function SkillModal({ skill, onClose, authUser, authProfile }) {
                                     <div className="w-3 h-3 rounded-full bg-yellow-500/50" />
                                     <div className="w-3 h-3 rounded-full bg-green-500/50" />
                                 </div>
-                                <span className="font-mono text-xs text-white/20">SKILL.md</span>
-                                {/* Rendered | Raw icon toggle */}
-                                <div className="flex items-center rounded-lg bg-white/[0.04] border border-white/[0.06] p-0.5" role="group">
-                                    {/* Eye = rendered/preview */}
-                                    <button
-                                        onClick={() => setViewMode('rendered')}
-                                        title="Rendered view"
-                                        className={`p-1.5 rounded-md transition-all duration-200 ${viewMode === 'rendered' ? 'bg-accent/20 text-accent shadow-sm' : 'text-white/30 hover:text-white/55'}`}
-                                    >
-                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                        </svg>
-                                    </button>
-                                    {/* Code brackets = raw */}
-                                    <button
-                                        onClick={() => setViewMode('raw')}
-                                        title="Raw markdown"
-                                        className={`p-1.5 rounded-md transition-all duration-200 ${viewMode === 'raw' ? 'bg-accent/20 text-accent shadow-sm' : 'text-white/30 hover:text-white/55'}`}
-                                    >
-                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
-                                        </svg>
-                                    </button>
-                                </div>
+                                <span className="font-mono text-xs text-white/20">
+                                    {activeFile ? activeFile.name : 'SKILL.md'}
+                                </span>
+                                {/* Only show toggle to logged-in users */}
+                                {!isGuest && (
+                                    <div className="relative flex items-center rounded-lg bg-white/[0.04] border border-white/[0.06] p-0.5" role="group">
+                                        {/* Sliding pill — moves across 3 segments */}
+                                        <span
+                                            aria-hidden="true"
+                                            className="absolute top-0.5 bottom-0.5 rounded-md bg-accent/20 shadow-sm pointer-events-none transition-all duration-200 ease-in-out"
+                                            style={{
+                                                width: 'calc(33.33% - 1.33px)',
+                                                left: viewMode === 'files' ? '2px' : viewMode === 'rendered' ? 'calc(33.33% + 0.67px)' : 'calc(66.67% - 0.67px)',
+                                            }}
+                                        />
+                                        {/* Files */}
+                                        <button
+                                            onClick={() => setViewMode('files')}
+                                            title="File explorer"
+                                            className={`relative z-10 p-1.5 rounded-md transition-colors duration-200 ${viewMode === 'files' ? 'text-accent' : 'text-white/30 hover:text-white/55'}`}
+                                        >
+                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+                                            </svg>
+                                        </button>
+                                        {/* Eye = rendered/preview */}
+                                        <button
+                                            onClick={() => { setViewMode('rendered'); setActiveFile(null); setActiveContent(null) }}
+                                            title="Rendered view"
+                                            className={`relative z-10 p-1.5 rounded-md transition-colors duration-200 ${viewMode === 'rendered' ? 'text-accent' : 'text-white/30 hover:text-white/55'}`}
+                                        >
+                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            </svg>
+                                        </button>
+                                        {/* Code brackets = raw */}
+                                        <button
+                                            onClick={() => { setViewMode('raw'); setActiveFile(null); setActiveContent(null) }}
+                                            title="Raw markdown"
+                                            className={`relative z-10 p-1.5 rounded-md transition-colors duration-200 ${viewMode === 'raw' ? 'text-accent' : 'text-white/30 hover:text-white/55'}`}
+                                        >
+                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                )}
                             </div>
+
+                            {/* ── Guest blur paywall ── */}
+                            {isGuest && content && splitMarkdown(content).rest.trim().length > 0 ? (
+                                <div className="relative">
+                                    {/* Preview — first 2 paragraphs, readable */}
+                                    <div className="p-6 sm:p-8 pointer-events-none select-none">
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+                                            h1: ({ children }) => <h1 className="font-satoshi font-semibold text-2xl text-white mb-4 mt-6 first:mt-0 pb-2 border-b border-white/10">{children}</h1>,
+                                            h2: ({ children }) => <h2 className="font-satoshi font-semibold text-xl text-white/90 mb-3 mt-5 first:mt-0 pb-1.5 border-b border-white/[0.07]">{children}</h2>,
+                                            p: ({ children }) => <p className="font-satoshi text-sm text-white/60 mb-3 leading-relaxed last:mb-0">{children}</p>,
+                                            code: ({ inline, children }) => inline
+                                                ? <code className="font-mono text-[12px] text-accent/90 bg-accent/10 px-1.5 py-0.5 rounded">{children}</code>
+                                                : <code className="block font-mono text-[12px] text-white/70 bg-white/[0.04] border border-white/[0.06] rounded-xl p-4 overflow-x-auto mb-3 leading-relaxed">{children}</code>,
+                                            pre: ({ children }) => <>{children}</>,
+                                        }}>
+                                            {splitMarkdown(content).preview}
+                                        </ReactMarkdown>
+                                    </div>
+
+                                    {/* Blurred continuation */}
+                                    <div className="relative overflow-hidden max-h-32 pointer-events-none select-none">
+                                        <div className="px-8 space-y-2.5 pb-4 opacity-30 blur-sm">
+                                            {[...Array(6)].map((_, i) => (
+                                                <div key={i} className={`h-3 bg-white/20 rounded-full ${i % 3 === 0 ? 'w-full' : i % 3 === 1 ? 'w-4/5' : 'w-3/5'}`} />
+                                            ))}
+                                        </div>
+                                        {/* Gradient fade */}
+                                        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0a0d17]/60 to-[#0a0d17]" />
+                                    </div>
+
+                                    {/* CTA overlay */}
+                                    <div className="relative px-6 pb-8 pt-2 flex flex-col items-center text-center gap-4">
+                                        <div className="w-10 h-10 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center">
+                                            <svg className="w-5 h-5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <p className="font-clash font-bold text-lg text-white mb-1">Sign in to read the full skill</p>
+                                            <p className="font-satoshi text-sm text-white/40">Free account required to access the complete content.</p>
+                                        </div>
+                                        <button
+                                            onClick={signIn}
+                                            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-accent text-navy font-satoshi font-bold text-sm hover:bg-[#6bbcff] hover:shadow-[0_0_24px_rgba(75,169,255,0.35)] transition-all duration-300"
+                                        >
+                                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" /></svg>
+                                            Continue with Google
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                            /* Logged-in (or very short skill): full content */
+                            <>
+                            {/* Files view — folder/file tree */}
+                            {viewMode === 'files' && (
+                                <div key="files" className="p-4 overflow-y-auto flex-1 modal-view-enter">
+                                    {skillFiles.length === 0 ? (
+                                        <div className="flex items-center justify-center py-10">
+                                            <svg className="w-5 h-5 text-accent animate-spin" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                            </svg>
+                                        </div>
+                                    ) : (
+                                        <FileTree
+                                            items={skillFiles}
+                                            rootName={skill.path.split('/').pop() || skill.name}
+                                            repo={skill.repo}
+                                            activeFile={activeFile}
+                                            onFileClick={handleFileClick}
+                                        />
+                                    )}
+                                </div>
+                            )}
 
                             {/* Rendered view — pretty markdown */}
                             {viewMode === 'rendered' && (
@@ -355,132 +643,173 @@ function SkillModal({ skill, onClose, authUser, authProfile }) {
 
                             {/* Raw view — monospace plain text */}
                             {viewMode === 'raw' && (
-                                <pre key="raw" className="p-5 text-sm font-mono text-white/70 whitespace-pre-wrap overflow-x-auto leading-relaxed overflow-y-auto flex-1 modal-view-enter">
-                                    {content}
-                                </pre>
+                                <div key="raw" className="flex flex-col flex-1 overflow-hidden modal-view-enter">
+                                    {/* File breadcrumb when viewing a tree-selected file */}
+                                    {activeFile && (
+                                        <div className="flex items-center gap-2 px-4 py-2 border-b border-white/[0.05] bg-white/[0.01] shrink-0">
+                                            <button
+                                                onClick={() => setViewMode('files')}
+                                                className="text-white/30 hover:text-accent transition-colors"
+                                                title="Back to files"
+                                            >
+                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                                                </svg>
+                                            </button>
+                                            <span className="font-mono text-[11px] text-white/30">{activeFile.path.split('/').slice(-2).join(' / ')}</span>
+                                            {fileLoading && (
+                                                <svg className="w-3 h-3 text-accent animate-spin ml-auto" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                                </svg>
+                                            )}
+                                        </div>
+                                    )}
+                                    <pre className="p-5 text-sm font-mono text-white/70 whitespace-pre-wrap overflow-x-auto leading-relaxed overflow-y-auto flex-1">
+                                        {activeContent ?? content}
+                                    </pre>
+                                </div>
                             )}
+                            </>)}
                         </div>
                     )}
                 </div>
 
                 {/* Footer actions */}
                 {content && (
-                    <div className="flex flex-wrap items-center gap-2 px-3 sm:px-6 py-3 sm:py-4 border-t border-white/[0.06] bg-white/[0.02] shrink-0">
-                        {/* Row 1: Copy + Share + Download */}
-                        <button
-                            onClick={handleCopy}
-                            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl border border-white/10 bg-white/[0.03] hover:border-accent/30 hover:bg-white/[0.06] transition-all duration-300 group"
-                        >
-                            {copied ? (
-                                <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                                </svg>
-                            ) : (
-                                <svg className="w-4 h-4 text-white/40 group-hover:text-accent transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
-                                </svg>
-                            )}
-                            <span className="font-satoshi text-sm text-white/60 group-hover:text-white/80 transition-colors hidden sm:inline">
-                                {copied ? 'Copied!' : 'Copy'}
-                            </span>
-                        </button>
-
-                        {/* Share */}
-                        <button
-                            onClick={handleShare}
-                            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl border border-white/10 bg-white/[0.03] hover:border-accent/30 hover:bg-white/[0.06] transition-all duration-300 group"
-                        >
-                            {linkCopied
-                                ? <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
-                                : <svg className="w-4 h-4 text-white/40 group-hover:text-accent transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" /></svg>
-                            }
-                            <span className="font-satoshi text-sm text-white/60 group-hover:text-white/80 transition-colors hidden sm:inline">
-                                {linkCopied ? 'Link copied!' : 'Share'}
-                            </span>
-                        </button>
-
-                        <button
-                            onClick={handleDownload}
-                            disabled={downloading}
-                            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-accent text-navy font-satoshi font-bold text-sm hover:bg-[#6bbcff] hover:shadow-[0_0_20px_rgba(75,169,255,0.3)] transition-all duration-300 disabled:opacity-50"
-                        >
-                            {downloading ? (
-                                <>
-                                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                    </svg>
-                                    Zipping…
-                                </>
-                            ) : (
-                                <>
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                                    </svg>
-                                    <span className="hidden sm:inline">Download .zip</span>
-                                </>
-                            )}
-                        </button>
-
-                        {/* GitHub — sits on same row on desktop, wraps naturally on mobile */}
-                        <a
-                            href={skill.htmlUrl || skill.attributionUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl border border-white/10 bg-white/[0.03] hover:border-accent/30 hover:bg-white/[0.06] transition-all duration-300 group sm:ml-auto"
-                        >
-                            <svg className="w-4 h-4 text-white/40 group-hover:text-accent transition-colors" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
-                            </svg>
-                            <span className="font-satoshi text-sm text-white/60 group-hover:text-white/80 transition-colors hidden sm:inline">View on GitHub</span>
-                        </a>
-
-                        {/* Save to Library — only for logged-in users */}
-                        {authUser && content && (
+                    <div className="flex items-center justify-between gap-2 px-3 sm:px-6 py-3 sm:py-4 border-t border-white/[0.06] bg-white/[0.02] shrink-0">
+                        {/* Left group: Copy + Share + Download */}
+                        <div className="flex items-center gap-2">
                             <button
-                                onClick={handleSave}
-                                disabled={saving || saved}
-                                title={saved ? 'Saved to your library!' : saveError || 'Save to your skill library'}
-                                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl border transition-all duration-300 font-satoshi font-semibold text-sm
-                                    ${saved
-                                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400 cursor-default'
-                                        : saveError
-                                            ? 'border-red-500/30 bg-red-500/10 text-red-400 cursor-default'
-                                            : 'border-white/10 bg-white/[0.03] text-white/60 hover:border-accent/30 hover:bg-accent/[0.06] hover:text-accent'
-                                    }`}
+                                onClick={isGuest ? signIn : handleCopy}
+                                title={isGuest ? 'Sign in to copy' : undefined}
+                                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl border transition-all duration-300 group ${isGuest ? 'border-white/[0.06] bg-white/[0.01] opacity-40 cursor-not-allowed' : 'border-white/10 bg-white/[0.03] hover:border-accent/30 hover:bg-white/[0.06]'}`}
                             >
-                                {saved ? (
-                                    <>
-                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                                        </svg>
-                                        <span className="hidden sm:inline">Saved!</span>
-                                    </>
-                                ) : saving ? (
+                                {copied ? (
+                                    <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                    </svg>
+                                ) : (
+                                    <svg className="w-4 h-4 text-white/40 group-hover:text-accent transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+                                    </svg>
+                                )}
+                                <span className="font-satoshi text-sm text-white/60 group-hover:text-white/80 transition-colors hidden sm:inline">
+                                    {copied ? 'Copied!' : 'Copy'}
+                                </span>
+                            </button>
+
+                            {/* Share */}
+                            <button
+                                onClick={handleShare}
+                                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl border border-white/10 bg-white/[0.03] hover:border-accent/30 hover:bg-white/[0.06] transition-all duration-300 group"
+                            >
+                                {linkCopied
+                                    ? <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                                    : <svg className="w-4 h-4 text-white/40 group-hover:text-accent transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" /></svg>
+                                }
+                                <span className="font-satoshi text-sm text-white/60 group-hover:text-white/80 transition-colors hidden sm:inline">
+                                    {linkCopied ? 'Link copied!' : 'Share'}
+                                </span>
+                            </button>
+
+                            <button
+                                onClick={isGuest ? signIn : handleDownload}
+                                disabled={downloading}
+                                title={isGuest ? 'Sign in to download' : undefined}
+                                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl font-satoshi font-bold text-sm transition-all duration-300 disabled:opacity-50 ${isGuest ? 'bg-accent/30 text-navy/60 cursor-not-allowed' : 'bg-accent text-navy hover:bg-[#6bbcff] hover:shadow-[0_0_20px_rgba(75,169,255,0.3)]'}`}
+                            >
+                                {downloading ? (
                                     <>
                                         <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
                                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                                         </svg>
-                                        <span className="hidden sm:inline">Saving…</span>
-                                    </>
-                                ) : saveError ? (
-                                    <>
-                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-                                        </svg>
-                                        <span className="hidden sm:inline text-[12px]">{saveError.length > 30 ? 'Already saved' : saveError}</span>
+                                        Zipping…
                                     </>
                                 ) : (
                                     <>
-                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                                         </svg>
-                                        <span className="hidden sm:inline">Save</span>
+                                        <span className="hidden sm:inline">.zip</span>
                                     </>
                                 )}
                             </button>
-                        )}
+                        </div>
+
+                        {/* Right group: GitHub + Sign in to Save / Save */}
+                        <div className="flex items-center gap-2">
+                            <a
+                                href={skill.htmlUrl || skill.attributionUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl border border-white/10 bg-white/[0.03] hover:border-accent/30 hover:bg-white/[0.06] transition-all duration-300 group"
+                            >
+                                <svg className="w-4 h-4 text-white/40 group-hover:text-accent transition-colors" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                                </svg>
+                                <span className="font-satoshi text-sm text-white/60 group-hover:text-white/80 transition-colors hidden sm:inline">View on GitHub</span>
+                            </a>
+
+                            {/* Guest: Sign in to Save */}
+                            {isGuest && (
+                                <button
+                                    onClick={signIn}
+                                    className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl border border-accent/20 bg-accent/[0.06] text-accent font-satoshi font-semibold text-sm hover:bg-accent/15 hover:border-accent/40 transition-all duration-300"
+                                >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" /></svg>
+                                    <span className="hidden sm:inline">Sign in to Save</span>
+                                </button>
+                            )}
+
+                            {/* Logged-in: Save to Library */}
+                            {authUser && (
+                                <button
+                                    onClick={handleSave}
+                                    disabled={saving || saved}
+                                    title={saved ? 'Saved to your library!' : saveError || 'Save to your skill library'}
+                                    className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl border transition-all duration-300 font-satoshi font-semibold text-sm
+                                        ${saved
+                                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400 cursor-default'
+                                            : saveError
+                                                ? 'border-red-500/30 bg-red-500/10 text-red-400 cursor-default'
+                                                : 'border-white/10 bg-white/[0.03] text-white/60 hover:border-accent/30 hover:bg-accent/[0.06] hover:text-accent'
+                                        }`}
+                                >
+                                    {saved ? (
+                                        <>
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                            </svg>
+                                            <span className="hidden sm:inline">Saved!</span>
+                                        </>
+                                    ) : saving ? (
+                                        <>
+                                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                            </svg>
+                                            <span className="hidden sm:inline">Saving…</span>
+                                        </>
+                                    ) : saveError ? (
+                                        <>
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                                            </svg>
+                                            <span className="hidden sm:inline text-[12px]">{saveError.length > 30 ? 'Already saved' : saveError}</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
+                                            </svg>
+                                            <span className="hidden sm:inline">Save</span>
+                                        </>
+                                    )}
+                                </button>
+                            )}
+                        </div>
                     </div>
                 )}
 
@@ -506,7 +835,31 @@ function SkillModal({ skill, onClose, authUser, authProfile }) {
 /** Card for skills stored in Appwrite (user-uploaded). Matches OpenClaw CommunityCard design. */
 function DbSkillCard({ skill, uploaderProfile, onClick, index = 0 }) {
     const navigate = useNavigate()
+    const [downloading, setDownloading] = useState(false)
     const { title, description, category, star_count = 0, copy_count = 0, $createdAt, created_at } = skill
+
+    async function handleDownloadZip(e) {
+        e.stopPropagation()
+        if (downloading) return
+        setDownloading(true)
+        try {
+            const zip = new JSZip()
+            zip.file('SKILL.md', skill.content || `# ${title}\n\n${description || ''}`)
+            const blob = await zip.generateAsync({ type: 'blob' })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `${(title || 'skill').replace(/[^a-z0-9_-]/gi, '_')}.zip`
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            URL.revokeObjectURL(url)
+        } catch (err) {
+            console.error('Download failed:', err)
+        } finally {
+            setDownloading(false)
+        }
+    }
     const username = uploaderProfile?.username || 'unknown'
     const displayName = uploaderProfile?.display_name || username
     const avatarUrl = uploaderProfile?.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(username)}`
@@ -555,14 +908,14 @@ function DbSkillCard({ skill, uploaderProfile, onClick, index = 0 }) {
                             e.stopPropagation()
                             navigate(`/user/${username}`)
                         }}
-                        className="font-mono text-[11px] text-violet-300/80 hover:text-violet-200 transition-colors truncate max-w-[140px]"
+                        className="font-mono text-[11px] text-accent/80 hover:text-accent transition-colors truncate max-w-[140px]"
                         title={`@${username}`}
                     >
                         @{username}
                     </button>
                 </div>
                 {/* Community tag */}
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-satoshi font-bold border bg-violet-500/10 text-violet-300 border-violet-500/20 uppercase tracking-wider">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-satoshi font-bold border bg-accent/10 text-accent border-accent/20 uppercase tracking-wider">
                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
@@ -600,12 +953,33 @@ function DbSkillCard({ skill, uploaderProfile, onClick, index = 0 }) {
                     {ago && <span className="text-white/20 font-satoshi text-[10px]">{ago}</span>}
                 </div>
 
-                {/* Category badge */}
-                {category && (
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-satoshi font-bold border ${catStyle} uppercase tracking-wider`}>
-                        {category}
-                    </span>
-                )}
+                <div className="flex items-center gap-1.5">
+                    {/* Download zip */}
+                    <button
+                        onClick={handleDownloadZip}
+                        title="Download .zip"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/[0.06] border border-accent/15 text-accent/80 font-satoshi text-xs font-semibold hover:bg-accent/15 hover:border-accent/30 hover:text-accent hover:shadow-[0_0_12px_rgba(75,169,255,0.12)] transition-all duration-300 disabled:opacity-40"
+                        disabled={downloading}
+                    >
+                        {downloading ? (
+                            <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                        ) : (
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                            </svg>
+                        )}
+                        <span>.zip</span>
+                    </button>
+                    {/* Category badge */}
+                    {category && (
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-satoshi font-bold border ${catStyle} uppercase tracking-wider`}>
+                            {category}
+                        </span>
+                    )}
+                </div>
             </div>
         </div>
     )
@@ -616,16 +990,25 @@ export default function BrowseSkills() {
     const navigate = useNavigate()
     const [searchParams] = useSearchParams()
     const { user: authUser, profile: authProfile } = useAuth()
-    const [officialSkills, setOfficialSkills] = useState([])
-    const [openClawSkills, setOpenClawSkills] = useState([])
-    const [communitySkills, setCommunitySkills] = useState([])
-    const [errors, setErrors] = useState([])
-    const [loading, setLoading] = useState(true)
+
+    // ── Per-source state: { [key]: { skills, loading, error } } ──────────
+    // Keys: company name for official (Anthropic etc), 'OpenClaw', label for community flat
+    const [sourceData, setSourceData] = useState(() => {
+        const d = {}
+        FEATURED_SOURCES.forEach(s => { d[s.company] = { skills: [], loading: true, error: null } })
+        d.OpenClaw = { skills: [], loading: true, error: null }
+        COMMUNITY_FLAT_SOURCES.forEach(s => { d[s.label] = { skills: [], loading: true, error: null } })
+        return d
+    })
+    // "See all" expansion per source (collapses to INITIAL_PER_SOURCE in All mode)
+    const [expandedSources, setExpandedSources] = useState(new Set())
+    const INITIAL_PER_SOURCE = 6
+
     const [activeFilter, setActiveFilter] = useState('All')
     const [selectedSkill, setSelectedSkill] = useState(null)
     const [downloadingId, setDownloadingId] = useState(null)
     const [searchQuery, setSearchQuery] = useState('')
-    const PAGE_SIZE = 48
+    const OC_PAGE_SIZE = 48
     const [ocPage, setOcPage] = useState(1)
 
     // ─ DB community skills state
@@ -644,21 +1027,49 @@ export default function BrowseSkills() {
         }
     }, [searchParams, navigate])
 
-    // Fetch GitHub featured skills
+    // Fetch GitHub featured skills — each source fires independently so cards appear
+    // as soon as that source resolves, not after ALL sources have finished.
     useEffect(() => {
-        fetchAllFeaturedSkills()
-            .then(({ skills: s, openClawSkills: oc, communitySkills: cs, errors: e }) => {
-                setOfficialSkills(s)
-                setOpenClawSkills(oc)
-                setCommunitySkills(cs)
-                setErrors(e)
-            })
-            .catch((err) => {
-                console.error('Failed to fetch featured skills:', err)
-                setErrors([{ company: 'All', error: err.message }])
-            })
-            .finally(() => setLoading(false))
+        const t0 = performance.now()
+        console.log('[Browse] Starting parallel GitHub fetches for all sources…')
+
+        function resolveSource(key, skills) {
+            console.log(`[Browse] ${key}: ${(performance.now() - t0).toFixed(0)}ms — ${skills.length} skills loaded`)
+            setSourceData(prev => ({ ...prev, [key]: { skills, loading: false, error: null } }))
+        }
+        function rejectSource(key, err) {
+            console.error(`[Browse] ${key} failed (${(performance.now() - t0).toFixed(0)}ms):`, err.message)
+            setSourceData(prev => ({ ...prev, [key]: { skills: [], loading: false, error: err.message } }))
+        }
+
+        // Official sources — all kicked off simultaneously
+        FEATURED_SOURCES.forEach(source => {
+            Promise.all([fetchSkillFolders(source), fetchRepoStars(source.repo)])
+                .then(([folders, stars]) => resolveSource(source.company, folders.map(f => ({ ...f, stars }))))
+                .catch(err => rejectSource(source.company, err))
+        })
+
+        // OpenClaw (tree-based single API call)
+        Promise.all([fetchOpenClawSkills(OPENCLAW_SOURCE), fetchRepoStars(OPENCLAW_SOURCE.repo)])
+            .then(([skills, stars]) => resolveSource('OpenClaw', skills.map(s => ({ ...s, stars }))))
+            .catch(err => rejectSource('OpenClaw', err))
+
+        // Community flat sources (Composio etc.)
+        COMMUNITY_FLAT_SOURCES.forEach(source => {
+            fetchCommunityFlatSkills(source)
+                .then(skills => resolveSource(source.label, skills))
+                .catch(err => rejectSource(source.label, err))
+        })
     }, [])
+
+    // Derive flat arrays + loading/errors from per-source state
+    const officialSkills = FEATURED_SOURCES.flatMap(s => sourceData[s.company]?.skills ?? [])
+    const openClawSkills = sourceData.OpenClaw?.skills ?? []
+    const communitySkills = COMMUNITY_FLAT_SOURCES.flatMap(s => sourceData[s.label]?.skills ?? [])
+    const loading = Object.values(sourceData).some(d => d.loading)
+    const errors = Object.entries(sourceData)
+        .filter(([, d]) => d.error)
+        .map(([company, d]) => ({ company, error: d.error }))
 
     // Fetch DB community skills + uploader profiles
     useEffect(() => {
@@ -887,7 +1298,7 @@ export default function BrowseSkills() {
                 )}
 
                 {/* ── Unified skills grid ─────────────────────────────────── */}
-                {(filteredOfficial.length > 0 || filteredCommunity.length > 0 || filteredOpenClaw.length > 0 || filteredDbSkills.length > 0) && (
+                {(loading || filteredOfficial.length > 0 || filteredCommunity.length > 0 || filteredOpenClaw.length > 0 || filteredDbSkills.length > 0 || !dbLoading) && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 
                         {/* ── From the Community (Skill Issue DB) — first, leftmost ── */}
@@ -933,26 +1344,24 @@ export default function BrowseSkills() {
                                         index={i}
                                     />
                                 ))}
-                                {/* Skeleton placeholder for GitHub skills loading below DB skills */}
-                                {loading && (
-                                    <>
-                                        <div className="col-span-1 sm:col-span-2 lg:col-span-3 h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent my-1" />
-                                        {Array.from({ length: 6 }).map((_, i) => (
-                                            <SkeletonCard key={`gh-skel-${i}`} />
-                                        ))}
-                                    </>
-                                )}
                                 {/* Separator after DB skills before GitHub skills */}
-                                {!loading && (filteredOfficial.length > 0 || filteredCommunity.length > 0 || filteredOpenClaw.length > 0) && (
+                                {(loading || filteredOfficial.length > 0 || filteredCommunity.length > 0 || filteredOpenClaw.length > 0) && (
                                     <div className="col-span-1 sm:col-span-2 lg:col-span-3 h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent my-1" />
                                 )}
                             </>
                         )}
 
-                        {/* Official cards — grouped by company with dividers */}
+                        {/* Official cards — grouped by company with per-source skeleton + limit */}
                         {FEATURED_SOURCES.map((source) => {
+                            const srcData = sourceData[source.company]
+                            const isSourceLoading = srcData?.loading ?? false
                             const companySkills = filteredOfficial.filter((s) => s.company === source.company)
-                            if (companySkills.length === 0) return null
+                            const isExpanded = expandedSources.has(source.company)
+                            const showLimit = activeFilter === 'All' && !isExpanded && !q
+                            const displaySkills = showLimit ? companySkills.slice(0, INITIAL_PER_SOURCE) : companySkills
+                            const hasMore = showLimit && companySkills.length > INITIAL_PER_SOURCE
+
+                            if (!isSourceLoading && companySkills.length === 0) return null
                             return (
                                 <Fragment key={source.company}>
                                     <div className="col-span-1 sm:col-span-2 lg:col-span-3 flex items-center gap-4 py-2">
@@ -965,65 +1374,132 @@ export default function BrowseSkills() {
                                             />
                                             <span className="font-satoshi text-[11px] font-semibold text-white/20 tracking-widest uppercase">{source.company}</span>
                                             <span className="text-emerald-500/20 select-none">·</span>
-                                            <span className="font-satoshi text-[11px] font-semibold text-white/20 tracking-widest uppercase">{companySkills.length} skills</span>
+                                            {isSourceLoading ? (
+                                                <svg className="w-3 h-3 text-white/15 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                                </svg>
+                                            ) : (
+                                                <span className="font-satoshi text-[11px] font-semibold text-white/20 tracking-widest uppercase">{companySkills.length} skills</span>
+                                            )}
                                         </div>
                                         <div className="flex-1 h-[1px] bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent" />
                                     </div>
-                                    {companySkills.map((skill) => (
-                                        <FeaturedSkillCard
-                                            key={`${skill.repo}:${skill.path}`}
-                                            skill={skill}
-                                            onClick={setSelectedSkill}
-                                            onDownload={handleDownload}
-                                            isDownloading={downloadingId === `${skill.repo}:${skill.path}`}
-                                        />
-                                    ))}
+                                    {isSourceLoading ? (
+                                        Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={`sk-${source.company}-${i}`} />)
+                                    ) : (
+                                        <>
+                                            {displaySkills.map((skill) => (
+                                                <FeaturedSkillCard
+                                                    key={`${skill.repo}:${skill.path}`}
+                                                    skill={skill}
+                                                    onClick={setSelectedSkill}
+                                                    onDownload={handleDownload}
+                                                    isDownloading={downloadingId === `${skill.repo}:${skill.path}`}
+                                                />
+                                            ))}
+                                            {hasMore && (
+                                                <div className="col-span-1 sm:col-span-2 lg:col-span-3 flex justify-center py-1">
+                                                    <button
+                                                        onClick={() => setExpandedSources(prev => new Set([...prev, source.company]))}
+                                                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] text-emerald-300/70 hover:text-emerald-200 hover:border-emerald-500/35 hover:bg-emerald-500/10 font-satoshi text-sm font-medium transition-all duration-300"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                                        </svg>
+                                                        See all {companySkills.length} from {source.company}
+                                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">
+                                                            +{companySkills.length - INITIAL_PER_SOURCE} more
+                                                        </span>
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
                                 </Fragment>
                             )
                         })}
 
-                        {/* Composio (community flat) divider + cards */}
-                        {filteredCommunity.length > 0 && (
-                            <>
-                                {filteredOfficial.length > 0 && (
-                                    <div className="col-span-1 sm:col-span-2 lg:col-span-3 flex items-center gap-4 py-2">
-                                        <div className="flex-1 h-[1px] bg-gradient-to-r from-transparent via-white/[0.07] to-transparent" />
-                                        <div className="flex items-center gap-2 shrink-0">
-                                            <img
-                                                src="https://avatars.githubusercontent.com/ComposioHQ"
-                                                alt="Composio"
-                                                className="w-5 h-5 rounded-full border border-violet-500/30"
-                                            />
-                                            <span className="font-satoshi text-[11px] font-semibold text-white/30 tracking-widest uppercase">Community</span>
-                                            <span className="text-white/15 select-none">·</span>
-                                            <a
-                                                href="https://github.com/ComposioHQ/awesome-claude-skills"
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="font-satoshi text-[11px] font-semibold text-violet-400/60 hover:text-violet-300 transition-colors tracking-widest uppercase"
-                                            >
-                                                Composio
-                                            </a>
-                                        </div>
-                                        <div className="flex-1 h-[1px] bg-gradient-to-r from-transparent via-white/[0.07] to-transparent" />
-                                    </div>
-                                )}
-                                {filteredCommunity.map((skill) => (
-                                    <FeaturedSkillCard
-                                        key={`${skill.repo}:${skill.path}`}
-                                        skill={skill}
-                                        onClick={setSelectedSkill}
-                                        onDownload={handleDownload}
-                                        isDownloading={downloadingId === `${skill.repo}:${skill.path}`}
-                                    />
-                                ))}
-                            </>
-                        )}
+                        {/* Composio (community flat) — skeleton while loading + 6-initial limit */}
+                        {COMMUNITY_FLAT_SOURCES.map((flatSource) => {
+                            const srcData = sourceData[flatSource.label]
+                            const isSourceLoading = srcData?.loading ?? false
+                            const sourceSkills = filteredCommunity.filter((s) => s.label === flatSource.label)
+                            const isExpanded = expandedSources.has(flatSource.label)
+                            const showLimit = activeFilter === 'All' && !isExpanded && !q
+                            const displaySkills = showLimit ? sourceSkills.slice(0, INITIAL_PER_SOURCE) : sourceSkills
+                            const hasMore = showLimit && sourceSkills.length > INITIAL_PER_SOURCE
 
-                        {/* OpenClaw divider + paginated cards */}
-                        {filteredOpenClaw.length > 0 && (
+                            if (!isSourceLoading && sourceSkills.length === 0) return null
+                            return (
+                                <Fragment key={flatSource.label}>
+                                    {(filteredOfficial.length > 0 || FEATURED_SOURCES.some(s => !sourceData[s.company]?.loading)) && (
+                                        <div className="col-span-1 sm:col-span-2 lg:col-span-3 flex items-center gap-4 py-2">
+                                            <div className="flex-1 h-[1px] bg-gradient-to-r from-transparent via-white/[0.07] to-transparent" />
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <img
+                                                    src={`https://avatars.githubusercontent.com/${flatSource.company}`}
+                                                    alt={flatSource.label}
+                                                    className="w-5 h-5 rounded-full border border-violet-500/30"
+                                                />
+                                                <span className="font-satoshi text-[11px] font-semibold text-white/30 tracking-widest uppercase">Community</span>
+                                                <span className="text-white/15 select-none">·</span>
+                                                {isSourceLoading ? (
+                                                    <svg className="w-3 h-3 text-white/15 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                                    </svg>
+                                                ) : (
+                                                    <a href={flatSource.github_url} target="_blank" rel="noopener noreferrer"
+                                                        className="font-satoshi text-[11px] font-semibold text-violet-400/60 hover:text-violet-300 transition-colors tracking-widest uppercase">
+                                                        {flatSource.label}
+                                                    </a>
+                                                )}
+                                            </div>
+                                            <div className="flex-1 h-[1px] bg-gradient-to-r from-transparent via-white/[0.07] to-transparent" />
+                                        </div>
+                                    )}
+                                    {isSourceLoading ? (
+                                        Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={`sk-${flatSource.label}-${i}`} />)
+                                    ) : (
+                                        <>
+                                            {displaySkills.map((skill) => (
+                                                <FeaturedSkillCard
+                                                    key={`${skill.repo}:${skill.path}`}
+                                                    skill={skill}
+                                                    onClick={setSelectedSkill}
+                                                    onDownload={handleDownload}
+                                                    isDownloading={downloadingId === `${skill.repo}:${skill.path}`}
+                                                />
+                                            ))}
+                                            {hasMore && (
+                                                <div className="col-span-1 sm:col-span-2 lg:col-span-3 flex justify-center py-1">
+                                                    <button
+                                                        onClick={() => setExpandedSources(prev => new Set([...prev, flatSource.label]))}
+                                                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-violet-500/20 bg-violet-500/[0.05] text-violet-300/70 hover:text-violet-200 hover:border-violet-500/35 hover:bg-violet-500/10 font-satoshi text-sm font-medium transition-all duration-300"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                                        </svg>
+                                                        See all {sourceSkills.length} from {flatSource.label}
+                                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-400">
+                                                            +{sourceSkills.length - INITIAL_PER_SOURCE} more
+                                                        </span>
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                                </Fragment>
+                            )
+                        })}
+
+                        {/* OpenClaw — skeleton while loading, then paginated (or 6 in All mode) */}
+                        {(sourceData.OpenClaw?.loading || filteredOpenClaw.length > 0) && (
                             <>
-                                {(filteredOfficial.length > 0 || filteredCommunity.length > 0) && (
+                                {(filteredOfficial.length > 0 || filteredCommunity.length > 0 ||
+                                    FEATURED_SOURCES.some(s => !sourceData[s.company]?.loading) ||
+                                    COMMUNITY_FLAT_SOURCES.some(s => !sourceData[s.label]?.loading)) && (
                                     <div className="col-span-1 sm:col-span-2 lg:col-span-3 flex items-center gap-4 py-2">
                                         <div className="flex-1 h-[1px] bg-gradient-to-r from-transparent via-white/[0.07] to-transparent" />
                                         <div className="flex items-center gap-2 shrink-0">
@@ -1034,43 +1510,83 @@ export default function BrowseSkills() {
                                             />
                                             <span className="font-satoshi text-[11px] font-semibold text-white/30 tracking-widest uppercase">Community</span>
                                             <span className="text-white/15 select-none">·</span>
-                                            <a
-                                                href={OPENCLAW_SOURCE.github_url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="font-satoshi text-[11px] font-semibold text-violet-400/60 hover:text-violet-300 transition-colors tracking-widest uppercase"
-                                            >
-                                                OpenClaw
-                                            </a>
+                                            {sourceData.OpenClaw?.loading ? (
+                                                <svg className="w-3 h-3 text-white/15 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                                </svg>
+                                            ) : (
+                                                <a
+                                                    href={OPENCLAW_SOURCE.github_url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="font-satoshi text-[11px] font-semibold text-violet-400/60 hover:text-violet-300 transition-colors tracking-widest uppercase"
+                                                >
+                                                    OpenClaw
+                                                </a>
+                                            )}
                                         </div>
                                         <div className="flex-1 h-[1px] bg-gradient-to-r from-transparent via-white/[0.07] to-transparent" />
                                     </div>
                                 )}
-                                {filteredOpenClaw.slice(0, ocPage * PAGE_SIZE).map((skill) => (
-                                    <FeaturedSkillCard
-                                        key={`${skill.repo}:${skill.path}`}
-                                        skill={skill}
-                                        onClick={setSelectedSkill}
-                                        onDownload={handleDownload}
-                                        isDownloading={downloadingId === `${skill.repo}:${skill.path}`}
-                                    />
-                                ))}
-                                {filteredOpenClaw.length > ocPage * PAGE_SIZE && (
-                                    <div className="col-span-1 sm:col-span-2 lg:col-span-3 flex justify-center pt-2 pb-1">
-                                        <button
-                                            onClick={() => setOcPage((p) => p + 1)}
-                                            className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-violet-500/20 bg-violet-500/[0.05] text-violet-300/70 hover:text-violet-200 hover:border-violet-500/35 hover:bg-violet-500/10 font-satoshi text-sm font-medium transition-all duration-300"
-                                        >
-                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                                            </svg>
-                                            Load more from OpenClaw
-                                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-400">
-                                                {filteredOpenClaw.length - ocPage * PAGE_SIZE} remaining
-                                            </span>
-                                        </button>
-                                    </div>
-                                )}
+                                {sourceData.OpenClaw?.loading ? (
+                                    Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={`sk-openclaw-${i}`} />)
+                                ) : (() => {
+                                    // In "All" mode: show only INITIAL_PER_SOURCE unless expanded
+                                    const isExpanded = expandedSources.has('OpenClaw')
+                                    const showLimit = activeFilter === 'All' && !isExpanded && !q
+                                    const pagedSkills = showLimit
+                                        ? filteredOpenClaw.slice(0, INITIAL_PER_SOURCE)
+                                        : filteredOpenClaw.slice(0, ocPage * OC_PAGE_SIZE)
+                                    const hasMoreInitial = showLimit && filteredOpenClaw.length > INITIAL_PER_SOURCE
+                                    const hasMorePaged = !showLimit && filteredOpenClaw.length > ocPage * OC_PAGE_SIZE
+
+                                    return (
+                                        <>
+                                            {pagedSkills.map((skill) => (
+                                                <FeaturedSkillCard
+                                                    key={`${skill.repo}:${skill.path}`}
+                                                    skill={skill}
+                                                    onClick={setSelectedSkill}
+                                                    onDownload={handleDownload}
+                                                    isDownloading={downloadingId === `${skill.repo}:${skill.path}`}
+                                                />
+                                            ))}
+                                            {hasMoreInitial && (
+                                                <div className="col-span-1 sm:col-span-2 lg:col-span-3 flex justify-center pt-2 pb-1">
+                                                    <button
+                                                        onClick={() => setExpandedSources(prev => new Set([...prev, 'OpenClaw']))}
+                                                        className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-violet-500/20 bg-violet-500/[0.05] text-violet-300/70 hover:text-violet-200 hover:border-violet-500/35 hover:bg-violet-500/10 font-satoshi text-sm font-medium transition-all duration-300"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                                        </svg>
+                                                        See all from OpenClaw
+                                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-400">
+                                                            {filteredOpenClaw.length.toLocaleString()} skills
+                                                        </span>
+                                                    </button>
+                                                </div>
+                                            )}
+                                            {hasMorePaged && (
+                                                <div className="col-span-1 sm:col-span-2 lg:col-span-3 flex justify-center pt-2 pb-1">
+                                                    <button
+                                                        onClick={() => setOcPage((p) => p + 1)}
+                                                        className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-violet-500/20 bg-violet-500/[0.05] text-violet-300/70 hover:text-violet-200 hover:border-violet-500/35 hover:bg-violet-500/10 font-satoshi text-sm font-medium transition-all duration-300"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                                        </svg>
+                                                        Load more from OpenClaw
+                                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-400">
+                                                            {filteredOpenClaw.length - ocPage * OC_PAGE_SIZE} remaining
+                                                        </span>
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </>
+                                    )
+                                })()}
                             </>
                         )}
                     </div>
@@ -1106,8 +1622,8 @@ export default function BrowseSkills() {
                 <UserSkillModal
                     skill={selectedDbSkill}
                     onClose={() => setSelectedDbSkill(null)}
-                    isOwner={authUser?.id === selectedDbSkill.user_id || authProfile?.user_id === selectedDbSkill.user_id}
-                    onDelete={authUser?.id === selectedDbSkill.user_id ? async () => { setSelectedDbSkill(null) } : undefined}
+                    isOwner={authUser?.$id === selectedDbSkill.user_id || authProfile?.user_id === selectedDbSkill.user_id}
+                    onDelete={authUser?.$id === selectedDbSkill.user_id || authProfile?.user_id === selectedDbSkill.user_id ? async () => { setSelectedDbSkill(null) } : undefined}
                     onTogglePrivate={undefined}
                 />
             )}

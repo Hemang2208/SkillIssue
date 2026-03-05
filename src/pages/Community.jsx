@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { getAllUsers, getPublicSkillsStatsByUser } from '../lib/userService'
+import { getCommunityUsers, getPublicSkillsStatsByUser } from '../lib/userService'
+
+// ── Module-level page cache (5 min TTL) ────────────────────────────────
+// First 12 users + stats are cached so revisiting the page is instant.
+const CACHE_TTL = 5 * 60 * 1000
+let _pageCache = null // { users, stats, total, cursor, expiresAt }
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -174,12 +179,13 @@ function sortUsers(users, sortId, stats) {
     if (sortId === 'skills') {
         return arr.sort((a, b) => (stats[b.user_id]?.skills ?? 0) - (stats[a.user_id]?.skills ?? 0))
     }
-    // 'joined' — already ordered by $createdAt desc from Appwrite, preserve that
-    return arr.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    // 'joined' — Appwrite already returns documents ordered by $createdAt DESC.
+    // No JS sort needed; return as-is to preserve the server-side order.
+    return arr
 }
 
-// ── Main Page ─────────────────────────────────────────────────
-const PAGE_SIZE = 100
+// ── Main Page ───────────────────────────────────────────────────────────────
+const PAGE_SIZE = 12
 
 export default function Community() {
     const [allUsers, setAllUsers] = useState([])
@@ -208,18 +214,43 @@ export default function Community() {
         let cancelled = false
 
         async function init() {
+            // ── Serve from cache if fresh ─────────────────────────────
+            if (_pageCache && Date.now() < _pageCache.expiresAt) {
+                console.log('[Community] Cache hit — page loaded from memory')
+                setAllUsers(_pageCache.users)
+                setStats(_pageCache.stats)
+                setCursor(_pageCache.cursor)
+                setHasMore(_pageCache.total > _pageCache.users.length)
+                setLoading(false)
+                return
+            }
+
             setLoading(true)
             setError(null)
+            const t0 = performance.now()
+
             try {
                 const [result, skillStats] = await Promise.all([
-                    getAllUsers({ limit: PAGE_SIZE }),
+                    getCommunityUsers({ limit: PAGE_SIZE }),
                     getPublicSkillsStatsByUser(),
                 ])
+                console.log(`[Community] Users (${result.users.length}/${result.total}): ${(performance.now() - t0).toFixed(0)}ms`)
                 if (cancelled) return
+
+                const lastCursor = result.users[result.users.length - 1]?.$id ?? null
+
+                // ── Populate cache ────────────────────────────────────
+                _pageCache = {
+                    users: result.users,
+                    stats: skillStats,
+                    total: result.total,
+                    cursor: lastCursor,
+                    expiresAt: Date.now() + CACHE_TTL,
+                }
+
                 setAllUsers(result.users)
                 setStats(skillStats)
-                const last = result.users[result.users.length - 1]
-                setCursor(last?.$id ?? null)
+                setCursor(lastCursor)
                 setHasMore(result.users.length < result.total)
             } catch (err) {
                 if (!cancelled) setError('Failed to load community members.')
@@ -236,14 +267,23 @@ export default function Community() {
     async function loadMore() {
         if (!cursor || loadingMore) return
         setLoadingMore(true)
+        const t0 = performance.now()
         try {
-            const result = await getAllUsers({ limit: PAGE_SIZE, cursor })
-            setAllUsers(prev => [...prev, ...result.users])
-            const last = result.users[result.users.length - 1]
-            setCursor(last?.$id ?? null)
-            setHasMore(allUsers.length + result.users.length < result.total)
+            const result = await getCommunityUsers({ limit: PAGE_SIZE, cursor })
+            console.log(`[Community] Load more (${result.users.length} more, offset ${allUsers.length}): ${(performance.now() - t0).toFixed(0)}ms`)
+            const merged = [...allUsers, ...result.users]
+            const lastCursor = result.users[result.users.length - 1]?.$id ?? null
+            setAllUsers(merged)
+            setCursor(lastCursor)
+            setHasMore(merged.length < result.total)
+            // Update cache with expanded list
+            if (_pageCache) {
+                _pageCache.users = merged
+                _pageCache.cursor = lastCursor
+                _pageCache.total = result.total
+            }
         } catch (err) {
-            console.error(err)
+            console.error('[Community] loadMore error:', err)
         } finally {
             setLoadingMore(false)
         }
@@ -396,7 +436,7 @@ export default function Community() {
                                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                                             </svg>
-                                            Loading...
+                                            Loading…
                                         </>
                                     ) : (
                                         'Load more'

@@ -6,19 +6,22 @@ import { useAuth } from "../context/AuthContext"
 import { Marquee } from "./Marquee"
 
 const ReviewCard = ({ img, name, username, body }) => {
+    const profileUsername = username?.startsWith("@") ? username.slice(1) : username
     return (
-        <figure className="relative w-64 shrink-0 cursor-pointer overflow-hidden rounded-xl border p-4 transition-colors border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05]">
-            <div className="flex flex-row items-center gap-2">
-                <img className="rounded-full opacity-90" width="32" height="32" alt="" src={img} />
-                <div className="flex flex-col">
-                    <figcaption className="text-sm font-medium text-white/90">
-                        {name}
-                    </figcaption>
-                    <p className="text-xs font-medium text-white/40">{username}</p>
+        <Link to={`/user/${profileUsername}`} className="block">
+            <figure className="relative w-64 shrink-0 cursor-pointer overflow-hidden rounded-xl border p-4 transition-colors border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05]">
+                <div className="flex flex-row items-center gap-2">
+                    <img className="rounded-full opacity-90" width="32" height="32" alt="" src={img} />
+                    <div className="flex flex-col">
+                        <figcaption className="text-sm font-medium text-white/90">
+                            {name}
+                        </figcaption>
+                        <p className="text-xs font-medium text-white/40">{username}</p>
+                    </div>
                 </div>
-            </div>
-            <blockquote className="mt-3 text-sm text-white/70 leading-relaxed font-satoshi">{body}</blockquote>
-        </figure>
+                <blockquote className="mt-3 text-sm text-white/70 leading-relaxed font-satoshi">{body}</blockquote>
+            </figure>
+        </Link>
     )
 }
 
