@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useAuth } from './context/AuthContext'
 import Navbar from './components/Navbar'
 import Hero from './components/Hero'
+import VideoAndPlatforms from './components/VideoAndPlatforms'
 import { Testimonials } from './components/Testimonials'
 import WhatIsSkillFile from './components/WhatIsSkillFile'
 import HowItWorks from './components/HowItWorks'
@@ -25,6 +26,7 @@ function LandingPage() {
     return (
         <>
             <Hero />
+            <VideoAndPlatforms />
             <Testimonials />
             <WhatIsSkillFile />
             <HowItWorks />

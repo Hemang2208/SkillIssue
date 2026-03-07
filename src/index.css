@@ -2,6 +2,88 @@
 @import 'tailwindcss/components';
 @import 'tailwindcss/utilities';
 
+/* ── 3D Icon Sphere ─────────────────────────────────────────── */
+.sphere-icon-node {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: center center;
+  will-change: transform, opacity, filter;
+  pointer-events: auto;
+  border-radius: 12px;
+  overflow: visible;
+  cursor: pointer;
+}
+.sphere-icon-node svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+.sphere-icon-node:hover {
+  filter: drop-shadow(0 0 14px rgba(255,255,255,0.45)) !important;
+}
+
+/* Tooltip shown on icon hover */
+.sphere-tooltip {
+  position: fixed;
+  pointer-events: none;
+  z-index: 10000;
+  padding: 6px 16px;
+  background: rgba(255,255,255,0.07);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  color: #fff;
+  font-family: 'Satoshi', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: capitalize;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(-50%) translateY(-100%) translateY(-4px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.sphere-tooltip-visible {
+  opacity: 1 !important;
+  transform: translateX(-50%) translateY(-100%) translateY(0) !important;
+}
+.sphere-tooltip::before {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 9px;
+  height: 9px;
+  background: rgba(255,255,255,0.07);
+  border-right: 1px solid rgba(255,255,255,0.12);
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+
+/* Cloud wrapper — no clipping, tooltips use fixed positioning */
+.sphere-cloud-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+  position: relative;
+  z-index: 2;
+}
+
+/* ── Video glow wrapper ─────────────────────────────────────── */
+.video-glow-wrapper {
+  position: relative;
+  z-index: 0;
+  border: 1.5px solid rgba(75, 169, 255, 0.25);
+  box-shadow:
+    0 0 20px rgba(75, 169, 255, 0.12),
+    0 0 60px rgba(75, 169, 255, 0.06),
+    inset 0 0 20px rgba(75, 169, 255, 0.04);
+}
+
 /* ── Feature Cards — Two-column slide-in rows ───────────────── */
 
 /* Tall track that provides the scroll distance for the pin effect.

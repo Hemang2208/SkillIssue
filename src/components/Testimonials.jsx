@@ -5,13 +5,24 @@ import { hasSubmittedTestimonial } from "../lib/userService"
 import { useAuth } from "../context/AuthContext"
 import { Marquee } from "./Marquee"
 
+const FALLBACK_AVATAR = (name) =>
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(name || '?')}&background=1a1a2e&color=4ba9ff&size=64&bold=true&font-size=0.4`
+
 const ReviewCard = ({ img, name, username, body }) => {
     const profileUsername = username?.startsWith("@") ? username.slice(1) : username
     return (
         <Link to={`/user/${profileUsername}`} className="block">
             <figure className="relative w-64 shrink-0 cursor-pointer overflow-hidden rounded-xl border p-4 transition-colors border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05]">
                 <div className="flex flex-row items-center gap-2">
-                    <img className="rounded-full opacity-90" width="32" height="32" alt="" src={img} />
+                    <img
+                        className="w-8 h-8 shrink-0 rounded-full object-cover opacity-90"
+                        width="32"
+                        height="32"
+                        alt=""
+                        src={img || FALLBACK_AVATAR(name)}
+                        onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_AVATAR(name) }}
+                        referrerPolicy="no-referrer"
+                    />
                     <div className="flex flex-col">
                         <figcaption className="text-sm font-medium text-white/90">
                             {name}
@@ -74,7 +85,7 @@ export function Testimonials() {
                     Testimonials
                 </span>
                 <h2 className="font-clash font-bold text-3xl sm:text-4xl lg:text-5xl tracking-tight leading-[1.1] mb-4">
-                    What people say
+                    What people <span className="italic text-accent">say</span>
                 </h2>
             </div>
 

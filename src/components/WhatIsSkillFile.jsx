@@ -145,7 +145,7 @@ export default function WhatIsSkillFile() {
                         <h2 className="font-clash font-bold text-4xl sm:text-5xl lg:text-6xl tracking-tight leading-[1.1]">
                             Think of it like apps,
                             <br />
-                            <span className="italic text-accent glow-text">but for AI</span>
+                            <span className="italic text-accent">but for AI</span>
                         </h2>
                         <p className="font-satoshi text-base sm:text-lg text-white/50 leading-relaxed mt-4 max-w-2xl mx-auto">
                             You know how your phone has apps that make it smarter?{' '}
