@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import Sitemap from 'vite-plugin-sitemap'
+import { VitePWA } from 'vite-plugin-pwa'
 
 // Custom plugin: intercepts POST /api/generate and proxies to Groq API
 function groqApiPlugin() {
@@ -379,6 +380,47 @@ export default defineConfig({
         Sitemap({
             hostname: 'https://skillissue.bajpai.tech',
             dynamicRoutes: ['/build', '/browse', '/skill/github', '/community'],
+        }),
+        VitePWA({
+            registerType: 'autoUpdate',
+            includeAssets: ['favicon.png', 'skill issue white .png'],
+            manifest: {
+                name: 'Skill Issue',
+                short_name: 'SkillIssue',
+                description: 'The marketplace for AI skill files. Discover, save, share and combine skill files for Claude, ChatGPT, Gemini, Cursor and more.',
+                theme_color: '#0a0e1a',
+                background_color: '#0a0e1a',
+                display: 'standalone',
+                orientation: 'portrait',
+                start_url: '/',
+                scope: '/',
+                icons: [
+                    {
+                        src: '/favicon.png',
+                        sizes: '192x192',
+                        type: 'image/png',
+                    },
+                    {
+                        src: '/favicon.png',
+                        sizes: '512x512',
+                        type: 'image/png',
+                        purpose: 'any maskable',
+                    },
+                ],
+            },
+            workbox: {
+                globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+                runtimeCaching: [
+                    {
+                        urlPattern: /^https:\/\/api\.fontshare\.com\/.*/i,
+                        handler: 'CacheFirst',
+                        options: {
+                            cacheName: 'font-cache',
+                            expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+                        },
+                    },
+                ],
+            },
         }),
     ],
 })

@@ -11,45 +11,57 @@ export default function SplashScreen({ onDone }) {
         const bar = barRef.current
         if (!overlay || !logo || !bar) return
 
-        // ── Timeline ──────────────────────────────────────────
-        // 0ms    : logo fades + scales in (300ms)
-        // 50ms   : progress bar sweeps (550ms)
-        // 650ms  : logo fades out (150ms)
-        // 800ms  : overlay slides up (200ms)
-        // 1000ms : onDone → unmounts
+        const timers = []
 
-        // Logo enter
-        requestAnimationFrame(() => {
-            logo.style.opacity = '1'
-            logo.style.transform = 'scale(1)'
-        })
+        function startAnimation() {
+            // ── Timeline ──────────────────────────────────────────
+            // 0ms    : logo fades + scales in (300ms)
+            // 50ms   : progress bar sweeps (550ms)
+            // 650ms  : logo fades out (150ms)
+            // 800ms  : overlay slides up (200ms)
+            // 1000ms : onDone → unmounts
 
-        // Bar sweep
-        const barTimer = setTimeout(() => {
-            bar.style.width = '100%'
-        }, 50)
+            // Logo enter
+            requestAnimationFrame(() => {
+                logo.style.opacity = '1'
+                logo.style.transform = 'scale(1)'
+            })
 
-        // Logo exit
-        const logoExit = setTimeout(() => {
-            logo.style.opacity = '0'
-            logo.style.transform = 'scale(0.95)'
-        }, 650)
+            // Bar sweep
+            timers.push(setTimeout(() => {
+                bar.style.width = '100%'
+            }, 50))
 
-        // Overlay slide up
-        const overlayExit = setTimeout(() => {
-            overlay.style.transform = 'translateY(-100%)'
-        }, 800)
+            // Logo exit
+            timers.push(setTimeout(() => {
+                logo.style.opacity = '0'
+                logo.style.transform = 'scale(0.95)'
+            }, 650))
 
-        // Unmount
-        const done = setTimeout(() => {
-            onDone?.()
-        }, 1000)
+            // Overlay slide up
+            timers.push(setTimeout(() => {
+                overlay.style.transform = 'translateY(-100%)'
+            }, 800))
+
+            // Unmount
+            timers.push(setTimeout(() => {
+                onDone?.()
+            }, 1000))
+        }
+
+        // Wait for the logo image to load before starting the animation
+        // so the logo is always visible during the intro
+        if (logo.complete && logo.naturalWidth > 0) {
+            startAnimation()
+        } else {
+            logo.addEventListener('load', startAnimation, { once: true })
+            logo.addEventListener('error', startAnimation, { once: true })
+        }
 
         return () => {
-            clearTimeout(barTimer)
-            clearTimeout(logoExit)
-            clearTimeout(overlayExit)
-            clearTimeout(done)
+            timers.forEach(clearTimeout)
+            logo.removeEventListener('load', startAnimation)
+            logo.removeEventListener('error', startAnimation)
         }
     }, [onDone])
 

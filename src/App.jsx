@@ -21,6 +21,7 @@ import GitHubSkillPage from './pages/GitHubSkillPage'
 import Community from './pages/Community'
 import BottomNav from './components/BottomNav'
 import SplashScreen from './components/SplashScreen'
+import InstallPrompt from './components/InstallPrompt'
 
 function LandingPage() {
     return (
@@ -44,6 +45,7 @@ export default function App() {
     return (
         <div className="relative min-h-screen bg-navy text-white">
             {!splashDone && <SplashScreen onDone={() => setSplashDone(true)} />}
+            <InstallPrompt />
             {/* Grid Background */}
             <div className="grid-bg" />
 
