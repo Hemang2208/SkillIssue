@@ -1,0 +1,35 @@
+name: Crawl GitHub Skills
+
+on:
+  schedule:
+    # 1st and 15th of each month at 3:00 AM UTC
+    - cron: '0 3 1,15 * *'
+  workflow_dispatch: # Manual trigger from Actions tab
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run skill crawler
+        run: node scripts/run-crawler.mjs
+        env:
+          APPWRITE_ENDPOINT: https://fra.cloud.appwrite.io/v1
+          APPWRITE_PROJECT_ID: ${{ secrets.APPWRITE_PROJECT_ID }}
+          APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
+          APPWRITE_DATABASE_ID: skill-issue-db
+          APPWRITE_GITHUB_SKILLS_ID: github_skills
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}

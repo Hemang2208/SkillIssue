@@ -373,10 +373,94 @@ Produce a skill file that an AI agent could pick up and immediately use to produ
     }
 }
 
+// Custom plugin: intercepts GET /api/github-skills and queries Appwrite directly in dev mode
+function githubSkillsPlugin() {
+    let envVars = {}
+
+    return {
+        name: 'github-skills-proxy',
+        configResolved(config) {
+            envVars = loadEnv(config.mode, config.root, '')
+        },
+        configureServer(server) {
+            server.middlewares.use(async (req, res, next) => {
+                if (!req.url?.startsWith('/api/github-skills') || req.method !== 'GET') {
+                    return next()
+                }
+
+                const apiKey = envVars.APPWRITE_API_KEY
+                if (!apiKey) {
+                    res.writeHead(500, { 'Content-Type': 'application/json' })
+                    res.end(JSON.stringify({ error: 'APPWRITE_API_KEY not configured in .env' }))
+                    return
+                }
+
+                try {
+                    // Dynamic import to avoid bundling server SDK in client
+                    const { Client, Databases, Query } = await import('node-appwrite')
+
+                    const url = new URL(req.url, 'http://localhost')
+                    const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'))
+                    const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '25')))
+                    const offset = (page - 1) * limit
+                    const sort = url.searchParams.get('sort') || 'stars'
+                    const search = url.searchParams.get('search') || ''
+                    const owner = url.searchParams.get('owner') || ''
+                    const minStars = parseInt(url.searchParams.get('min_stars') || '0')
+
+                    const projectId = envVars.APPWRITE_PROJECT_ID || envVars.VITE_APPWRITE_PROJECT_ID
+                    const client = new Client()
+                        .setEndpoint(envVars.APPWRITE_ENDPOINT || 'https://fra.cloud.appwrite.io/v1')
+                        .setProject(projectId)
+                        .setKey(apiKey)
+
+                    const db = new Databases(client)
+                    const queries = [
+                        Query.greaterThanEqual('stars', minStars),
+                        Query.limit(limit),
+                        Query.offset(offset),
+                    ]
+                    if (sort === 'recent') queries.push(Query.orderDesc('last_indexed'))
+                    else queries.push(Query.orderDesc('stars'))
+                    if (search.trim()) queries.push(Query.search('skill_name', search.trim()))
+                    if (owner.trim()) queries.push(Query.equal('owner', owner.trim()))
+
+                    const result = await db.listDocuments('skill-issue-db', 'github_skills', queries)
+
+                    const skills = result.documents.map(doc => ({
+                        id: doc.$id,
+                        skill_key: doc.skill_key,
+                        skill_name: doc.skill_name,
+                        repo: doc.repo,
+                        file_path: doc.file_path,
+                        folder_path: doc.folder_path,
+                        owner: doc.owner,
+                        owner_avatar: doc.owner_avatar,
+                        repo_description: doc.repo_description,
+                        stars: doc.stars,
+                        html_url: doc.html_url,
+                        language: doc.language,
+                        topics: doc.topics || [],
+                        last_indexed: doc.last_indexed,
+                    }))
+
+                    res.writeHead(200, { 'Content-Type': 'application/json' })
+                    res.end(JSON.stringify({ total: result.total, page, limit, skills }))
+                } catch (err) {
+                    console.error('[github-skills-proxy]', err.message)
+                    res.writeHead(500, { 'Content-Type': 'application/json' })
+                    res.end(JSON.stringify({ error: err.message }))
+                }
+            })
+        },
+    }
+}
+
 export default defineConfig({
     plugins: [
         react(),
         groqApiPlugin(),
+        githubSkillsPlugin(),
         Sitemap({
             hostname: 'https://skillissue.bajpai.tech',
             dynamicRoutes: ['/build', '/browse', '/skill/github', '/community', '/about', '/privacy', '/terms'],
