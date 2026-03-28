@@ -265,6 +265,8 @@ export default function SkillBuilder() {
     const [isRefining, setIsRefining] = useState(false)
     const [viewMode, setViewMode] = useState('rendered') // 'rendered' | 'raw'
     const [showTestimonialModal, setShowTestimonialModal] = useState(false)
+    const [dragActive, setDragActive] = useState(false)
+    const [globalDragActive, setGlobalDragActive] = useState(false)
 
     const outputRef = useRef(null)
     const fileInputRef = useRef(null)
@@ -276,6 +278,62 @@ export default function SkillBuilder() {
             handleGenerate()
         }
     }, [isLoggedIn, pendingGenerate])
+
+    // Global drag and drop handlers
+    useEffect(() => {
+        const handleGlobalDragEnter = (e) => {
+            e.preventDefault()
+            e.stopPropagation()
+
+            // Check if dragging files
+            if (e.dataTransfer?.items) {
+                for (let item of e.dataTransfer.items) {
+                    if (item.kind === 'file') {
+                        setGlobalDragActive(true)
+                        break
+                    }
+                }
+            }
+        }
+
+        const handleGlobalDragLeave = (e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            // Only deactivate if leaving the window
+            if (e.clientX === 0 && e.clientY === 0) {
+                setGlobalDragActive(false)
+            }
+        }
+
+        const handleGlobalDragOver = (e) => {
+            e.preventDefault()
+            e.stopPropagation()
+        }
+
+        const handleGlobalDrop = (e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            setGlobalDragActive(false)
+
+            const files = e.dataTransfer.files
+            if (files && files.length > 0) {
+                // Create a synthetic event to pass to handleImageSelect
+                handleImageSelect({ target: { files } })
+            }
+        }
+
+        document.addEventListener('dragenter', handleGlobalDragEnter)
+        document.addEventListener('dragleave', handleGlobalDragLeave)
+        document.addEventListener('dragover', handleGlobalDragOver)
+        document.addEventListener('drop', handleGlobalDrop)
+
+        return () => {
+            document.removeEventListener('dragenter', handleGlobalDragEnter)
+            document.removeEventListener('dragleave', handleGlobalDragLeave)
+            document.removeEventListener('dragover', handleGlobalDragOver)
+            document.removeEventListener('drop', handleGlobalDrop)
+        }
+    }, [])
 
     // Convert uploaded files to base64 and append to the list
     function handleImageSelect(e) {
@@ -297,6 +355,35 @@ export default function SkillBuilder() {
 
     function removeReferenceImage(id) {
         setReferenceImages((prev) => prev.filter((img) => img.id !== id))
+    }
+
+    // Drag and drop handlers for reference images
+    function handleDragEnter(e) {
+        e.preventDefault()
+        e.stopPropagation()
+        setDragActive(true)
+    }
+
+    function handleDragLeave(e) {
+        e.preventDefault()
+        e.stopPropagation()
+        setDragActive(false)
+    }
+
+    function handleDragOver(e) {
+        e.preventDefault()
+        e.stopPropagation()
+    }
+
+    function handleDrop(e) {
+        e.preventDefault()
+        e.stopPropagation()
+        setDragActive(false)
+
+        const files = e.dataTransfer.files
+        if (files && files.length > 0) {
+            handleImageSelect({ target: { files } })
+        }
     }
 
     async function handleGenerate() {
@@ -456,6 +543,72 @@ export default function SkillBuilder() {
             {/* Ambient glow */}
             <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-accent/[0.04] rounded-full blur-[140px] pointer-events-none" />
 
+            {/* Global Drag & Drop Overlay */}
+            {globalDragActive && (
+                <div className="fixed inset-0 bg-navy/80 backdrop-blur-md z-[9999] flex flex-col items-center justify-center pointer-events-none">
+                    {/* Animated background grid */}
+                    <div className="absolute inset-0 opacity-10 pointer-events-none">
+                        <div className="absolute inset-0 bg-gradient-to-b from-accent/20 to-transparent" />
+                    </div>
+
+                    {/* Content */}
+                    <div className="relative z-10 text-center space-y-8 px-6">
+                        {/* Animated icon */}
+                        <div className="flex justify-center">
+                            <div className="relative w-32 h-32">
+                                {/* Outer rotating ring */}
+                                <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-accent border-r-accent animate-spin" style={{ animationDuration: '3s' }} />
+
+                                {/* Middle pulsing ring */}
+                                <div className="absolute inset-4 rounded-full border border-accent/30 animate-pulse" />
+
+                                {/* Inner content */}
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <svg className="w-16 h-16 text-accent animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 9.75h18M3 5.25A2.25 2.25 0 015.25 3h13.5A2.25 2.25 0 0121 5.25v13.5A2.25 2.25 0 0118.75 21H5.25A2.25 2.25 0 013 18.75V5.25z" />
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Text */}
+                        <div className="space-y-3">
+                            <h2 className="font-clash font-bold text-5xl sm:text-6xl text-white">
+                                DROP your images
+                            </h2>
+                            <p className="font-satoshi text-lg text-white/60 max-w-md mx-auto">
+                                Upload reference images to enhance your skill creation
+                            </p>
+                        </div>
+
+                        {/* Highlight box */}
+                        <div className="mt-12 inline-block">
+                            <div className="px-8 py-4 rounded-2xl border border-accent/40 bg-accent/[0.08] backdrop-blur-sm">
+                                <p className="font-satoshi text-sm font-medium text-accent">
+                                    ✨ Multiple images supported (JPG, PNG, WEBP)
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Floating particles effect */}
+                    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                        {[...Array(8)].map((_, i) => (
+                            <div
+                                key={i}
+                                className="absolute w-1 h-1 bg-accent/40 rounded-full animate-pulse"
+                                style={{
+                                    left: `${Math.random() * 100}%`,
+                                    top: `${Math.random() * 100}%`,
+                                    animationDelay: `${Math.random() * 2}s`,
+                                    animationDuration: `${2 + Math.random() * 1}s`,
+                                }}
+                            />
+                        ))}
+                    </div>
+                </div>
+            )}
+
             <div className="max-w-7xl mx-auto px-6 lg:px-8">
                 <Breadcrumbs items={[{ label: 'Skill Builder' }]} />
                 {/* ── Header (centered) ──── */}
@@ -518,7 +671,17 @@ export default function SkillBuilder() {
                             </div>
 
                             {referenceImages.length > 0 && (
-                                <div className="flex flex-wrap gap-3 mb-4">
+                                <div
+                                    onDragEnter={handleDragEnter}
+                                    onDragLeave={handleDragLeave}
+                                    onDragOver={handleDragOver}
+                                    onDrop={handleDrop}
+                                    className={`flex flex-wrap gap-3 mb-4 p-3 rounded-xl border border-dashed transition-all ${
+                                        dragActive
+                                            ? 'border-accent/40 bg-accent/[0.08]'
+                                            : 'border-transparent'
+                                    }`}
+                                >
                                     {referenceImages.map((img) => (
                                         <div key={img.id} className="relative group">
                                             <img
@@ -542,27 +705,43 @@ export default function SkillBuilder() {
                                         type="button"
                                         onClick={() => fileInputRef.current?.click()}
                                         className="h-20 w-20 flex flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.12] hover:border-accent/40 bg-white/[0.02] hover:bg-accent/[0.03] transition-all duration-200 group"
+                                        title="Drag and drop or click to upload more images"
                                     >
                                         <svg className="w-5 h-5 text-white/25 group-hover:text-accent/60 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                                         </svg>
+                                        <span className="text-white/20 group-hover:text-accent/50 font-satoshi text-[9px] mt-1 font-semibold transition-colors text-center leading-tight">
+                                            ADD MORE
+                                        </span>
                                     </button>
                                 </div>
                             )}
 
                             {referenceImages.length === 0 && (
-                                <button
-                                    type="button"
-                                    onClick={() => fileInputRef.current?.click()}
-                                    className="w-full flex flex-col items-center justify-center gap-2 px-6 py-6 rounded-xl border border-dashed border-white/[0.10] hover:border-accent/40 bg-white/[0.02] hover:bg-accent/[0.03] transition-all duration-300 group"
+                                <div
+                                    onDragEnter={handleDragEnter}
+                                    onDragLeave={handleDragLeave}
+                                    onDragOver={handleDragOver}
+                                    onDrop={handleDrop}
+                                    className={`rounded-xl border border-dashed transition-all ${
+                                        dragActive
+                                            ? 'border-accent/40 bg-accent/[0.08]'
+                                            : 'border-white/[0.10] hover:border-accent/40 hover:bg-accent/[0.03]'
+                                    }`}
                                 >
-                                    <svg className="w-6 h-6 text-white/25 group-hover:text-accent/60 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 9.75h18M3 5.25A2.25 2.25 0 015.25 3h13.5A2.25 2.25 0 0121 5.25v13.5A2.25 2.25 0 0118.75 21H5.25A2.25 2.25 0 013 18.75V5.25z" />
-                                    </svg>
-                                    <span className="font-satoshi text-sm text-white/30 group-hover:text-white/50 transition-colors">
-                                        Click to upload <span className="text-white/50">JPG, PNG, WEBP</span> — multiple allowed
-                                    </span>
-                                </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="w-full flex flex-col items-center justify-center gap-2 px-6 py-6 transition-all duration-300 group"
+                                    >
+                                        <svg className={`w-6 h-6 transition-colors ${dragActive ? 'text-accent/60' : 'text-white/25 group-hover:text-accent/60'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 9.75h18M3 5.25A2.25 2.25 0 015.25 3h13.5A2.25 2.25 0 0121 5.25v13.5A2.25 2.25 0 0118.75 21H5.25A2.25 2.25 0 013 18.75V5.25z" />
+                                        </svg>
+                                        <span className={`font-satoshi text-sm transition-colors ${dragActive ? 'text-accent/60' : 'text-white/30 group-hover:text-white/50'}`}>
+                                            {dragActive ? 'Drop images here' : 'DRAG and DROP or Click to Upload'} <span className={dragActive ? 'text-accent/50' : 'text-white/50'}>(JPG, PNG, WEBP)</span>
+                                        </span>
+                                    </button>
+                                </div>
                             )}
 
                             <input
