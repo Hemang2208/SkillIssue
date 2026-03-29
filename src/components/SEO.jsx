@@ -12,7 +12,7 @@ const TWITTER_HANDLE = '@BajpaiX'
  * Usage:
  *   <SEO
  *     title="Browse AI Skills"
- *     description="Explore 8,000+ AI skill files for Claude, ChatGPT, Gemini, Cursor and more."
+ *     description="Explore 50,000+ AI skill files for Claude, ChatGPT, Gemini, Cursor and more."
  *     path="/browse"
  *     jsonLd={{ "@type": "CollectionPage", ... }}
  *   />
@@ -29,7 +29,7 @@ export default function SEO({
     const fullTitle = title ? `${title} | ${SITE_NAME}` : `${SITE_NAME} — AI Skill Files Marketplace for Claude, ChatGPT, Gemini & Cursor`
     const canonicalUrl = `${SITE_URL}${path}`
     const ogImage = image || DEFAULT_IMAGE
-    const metaDescription = description || 'Discover, save, share and combine AI skill files for Claude, ChatGPT, Gemini, Cursor and more. 8,000+ skills available.'
+    const metaDescription = description || 'Discover, save, share and combine AI skill files for Claude, ChatGPT, Gemini, Cursor and more. 50,000+ skills available.'
 
     return (
         <Helmet>

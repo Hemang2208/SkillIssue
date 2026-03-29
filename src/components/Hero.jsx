@@ -256,7 +256,7 @@ export default function Hero() {
                             {/* Floating badge */}
                             <div className="absolute -bottom-4 -left-4 z-20 px-4 py-2 rounded-xl bg-navy-100 border border-accent/20 flex items-center gap-2">
                                 <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                                <span className="font-satoshi text-xs text-white/70">8,000+ skills available</span>
+                                <span className="font-satoshi text-xs text-white/70">50,000+ skills available</span>
                             </div>
                         </div>
                     </div>

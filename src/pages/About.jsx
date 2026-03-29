@@ -46,7 +46,7 @@ export default function About() {
 
                         <h2 className="font-clash font-semibold text-2xl text-white/90 pt-4">Key Features</h2>
                         <ul className="list-disc list-outside pl-5 space-y-2">
-                            <li><strong className="text-white/80">Browse & Discover</strong> — Explore 8,000+ skill files across coding, writing, design, marketing, and more.</li>
+                            <li><strong className="text-white/80">Browse & Discover</strong> — Explore 50,000+ skill files across coding, writing, design, marketing, and more.</li>
                             <li><strong className="text-white/80">Build Your Own</strong> — Use our AI-powered skill builder to create custom skill files in minutes.</li>
                             <li><strong className="text-white/80">Save & Organize</strong> — Build a private vault of your favorite skills.</li>
                             <li><strong className="text-white/80">Share & Collaborate</strong> — Publish skills for the community or keep them private.</li>

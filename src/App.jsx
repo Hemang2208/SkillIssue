@@ -33,7 +33,7 @@ function LandingPage() {
         <>
             <SEO
                 title={null}
-                description="Skill Issue is the marketplace for AI skill files. Discover, save, share and combine .md skill files for Claude, ChatGPT, Gemini, Cursor and more. 8,000+ skills available."
+                description="Skill Issue is the marketplace for AI skill files. Discover, save, share and combine .md skill files for Claude, ChatGPT, Gemini, Cursor and more. 50,000+ skills available."
                 path="/"
             />
             <Hero />
