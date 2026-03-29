@@ -106,7 +106,7 @@ export async function getPublicSkillsByUser(userId, sort = 'recent', limit = 12,
 }
 
 /** Fetch ALL public skills across all users (for the community browse section). */
-export async function getAllPublicSkills(sort = 'recent', limit = 100) {
+export async function getAllPublicSkills(sort = 'recent', limit = 100, search = '') {
     requireAppwrite()
     const sortQuery = {
         'recent': Query.orderDesc('$createdAt'),
@@ -114,16 +114,36 @@ export async function getAllPublicSkills(sort = 'recent', limit = 100) {
         'most-copied': Query.orderDesc('copy_count'),
     }[sort] ?? Query.orderDesc('$createdAt')
 
-    const res = await databases.listDocuments(
-        DATABASE_ID,
-        SKILLS_TABLE_ID,
-        [
-            Query.equal('visibility', 'public'),
-            sortQuery,
-            Query.limit(limit),
-        ]
-    )
-    return res.documents.map(normalise)
+    const queries = [
+        Query.equal('visibility', 'public'),
+        sortQuery,
+        Query.limit(limit),
+    ]
+    if (search.trim()) {
+        queries.push(Query.search('title', search.trim()))
+    }
+
+    try {
+        const res = await databases.listDocuments(
+            DATABASE_ID,
+            SKILLS_TABLE_ID,
+            queries
+        )
+        return res.documents.map(normalise)
+    } catch (err) {
+        // Fulltext index on 'title' may not exist — retry without search
+        if (search.trim() && err.message?.includes('index')) {
+            console.warn('[skillService] Fulltext search failed, falling back to unfiltered fetch:', err.message)
+            const fallbackQueries = [
+                Query.equal('visibility', 'public'),
+                sortQuery,
+                Query.limit(limit),
+            ]
+            const res = await databases.listDocuments(DATABASE_ID, SKILLS_TABLE_ID, fallbackQueries)
+            return res.documents.map(normalise)
+        }
+        throw err
+    }
 }
 
 /** Fetch all PRIVATE skills for the owner of a profile. */

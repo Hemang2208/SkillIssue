@@ -1,8 +1,11 @@
-// ── Service: Fetch indexed GitHub skills from the /api/github-skills endpoint ──
-// These are skills discovered by the cron crawler (SKILL.md files in repos with ≥50 stars).
-// Only metadata is stored — content is fetched on-demand from GitHub.
-
-const API_BASE = '/api/github-skills'
+// ── Service: Fetch indexed GitHub skills via API → MongoDB Atlas ─────────────
+// The API endpoint queries MongoDB, which gives us:
+// - Real total counts (no 5000 cap)
+// - Weighted full-text search (skill_name > owner > repo > description)
+// - Fast skip/limit pagination at any offset
+//
+// We go through the API because MongoDB can't be queried directly from the
+// browser (unlike Appwrite's per-collection permissions).
 
 // In-memory cache (session-level)
 const cache = new Map()
@@ -18,44 +21,55 @@ function setCache(key, data) {
 }
 
 /**
- * Fetch indexed skills with pagination, search, and sort.
+ * Fetch indexed skills with page-based pagination, search, and sort.
+ *
  * @param {Object} params
- * @param {number} params.page - Page number (1-based)
- * @param {number} params.limit - Results per page
- * @param {string} params.search - Search query
+ * @param {number}  params.limit     - Results per page (max 100)
+ * @param {number}  params.page      - Page number (1-based)
+ * @param {string}  params.search    - Full-text search query
  * @param {'stars'|'recent'} params.sort - Sort order
- * @param {string} params.owner - Filter by GitHub owner
- * @param {number} params.min_stars - Minimum star count
- * @returns {Promise<{ total: number, page: number, limit: number, skills: Array }>}
+ * @param {string}  params.owner     - Filter by GitHub owner
+ * @param {number}  params.min_stars - Minimum star count
+ * @returns {Promise<{ total: number, skills: Array, page: number, totalPages: number, hasMore: boolean }>}
  */
 export async function fetchIndexedSkills({
+    limit = 48,
     page = 1,
-    limit = 25,
     search = '',
     sort = 'stars',
     owner = '',
     min_stars = 0,
 } = {}) {
-    const params = new URLSearchParams({
-        page: String(page),
-        limit: String(limit),
-        sort,
-        min_stars: String(min_stars),
-    })
-    if (search.trim()) params.set('search', search.trim())
-    if (owner.trim()) params.set('owner', owner.trim())
-
-    const cacheKey = params.toString()
+    // Build a stable cache key from all params
+    const cacheKey = `idx:${limit}:${page}:${sort}:${min_stars}:${search}:${owner}`
     const cached = getCached(cacheKey)
     if (cached) return cached
 
-    const res = await fetch(`${API_BASE}?${params}`)
+    // Build query string
+    const params = new URLSearchParams({
+        limit: String(Math.min(100, Math.max(1, limit))),
+        page: String(Math.max(1, page)),
+        sort,
+    })
+    if (search.trim())    params.set('search', search.trim())
+    if (owner.trim())     params.set('owner', owner.trim())
+    if (min_stars > 0)    params.set('min_stars', String(min_stars))
+
+    const res = await fetch(`/api/github-skills?${params}`)
     if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || `API error ${res.status}`)
+        const errBody = await res.json().catch(() => ({}))
+        throw new Error(errBody.error || `API error ${res.status}`)
     }
 
-    const data = await res.json()
+    const json = await res.json()
+
+    const data = {
+        total: json.total,          // ← real count from MongoDB, no cap
+        skills: json.skills,
+        page: json.page,
+        totalPages: json.totalPages,
+        hasMore: json.hasMore,
+    }
     setCache(cacheKey, data)
     return data
 }

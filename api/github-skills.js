@@ -1,79 +1,102 @@
 /**
- * API: Query indexed GitHub skills from Appwrite
+ * API: Query indexed GitHub skills from MongoDB Atlas
  *
- * GET /api/github-skills?page=1&limit=25&search=react&sort=stars
+ * GET /api/github-skills?limit=48&page=1&sort=stars
+ * GET /api/github-skills?limit=48&page=2&search=react&sort=stars
+ * GET /api/github-skills?search=react&owner=vercel&min_stars=100
  *
+ * Backed by MongoDB — no 5000-total cap, real counts, fast text search.
  * Returns paginated, metadata-only skill results.
  * Content is NOT stored — frontend fetches .md on-demand from GitHub.
  */
 
-import { Client, Databases, Query } from 'node-appwrite';
-
-const APPWRITE_ENDPOINT = process.env.APPWRITE_ENDPOINT || 'https://fra.cloud.appwrite.io/v1';
-const APPWRITE_PROJECT_ID = process.env.APPWRITE_PROJECT_ID || process.env.VITE_APPWRITE_PROJECT_ID;
-const APPWRITE_API_KEY = process.env.APPWRITE_API_KEY;
-const DATABASE_ID = process.env.APPWRITE_DATABASE_ID || process.env.VITE_APPWRITE_DATABASE_ID || 'skill-issue-db';
-const COLLECTION_ID = process.env.APPWRITE_GITHUB_SKILLS_ID || process.env.VITE_APPWRITE_GITHUB_SKILLS_TABLE_ID || 'github_skills';
+import { getDb, COLLECTIONS } from './lib/mongodb.js';
 
 export default async function handler(req, res) {
     if (req.method !== 'GET') {
         return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
-    if (!APPWRITE_API_KEY) {
-        return res.status(500).json({ error: 'APPWRITE_API_KEY not configured' });
-    }
-
     const {
+        limit = '48',
         page = '1',
-        limit = '25',
         search = '',
-        sort = 'stars',   // "stars" | "recent"
-        owner = '',       // filter by owner
+        sort = 'stars',     // "stars" | "recent"
+        owner = '',
         min_stars = '0',
     } = req.query;
 
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 25));
-    const offset = (pageNum - 1) * limitNum;
-    const minStars = parseInt(min_stars, 10) || 50;
+    const limitNum  = Math.min(100, Math.max(1, parseInt(limit, 10) || 48));
+    const pageNum   = Math.max(1, parseInt(page, 10) || 1);
+    const skipNum   = (pageNum - 1) * limitNum;
+    const minStars  = parseInt(min_stars, 10) || 0;
 
     try {
-        const client = new Client()
-            .setEndpoint(APPWRITE_ENDPOINT)
-            .setProject(APPWRITE_PROJECT_ID)
-            .setKey(APPWRITE_API_KEY);
-        const db = new Databases(client);
+        const db   = await getDb();
+        const coll = db.collection(COLLECTIONS.GITHUB_SKILLS);
 
-        // Build query
-        const queries = [
-            Query.greaterThanEqual('stars', minStars),
-            Query.limit(limitNum),
-            Query.offset(offset),
-        ];
+        // ── Build filter ────────────────────────────────────────────
+        const filter = {};
 
-        // Sort
-        if (sort === 'recent') {
-            queries.push(Query.orderDesc('last_indexed'));
-        } else {
-            queries.push(Query.orderDesc('stars'));
+        if (minStars > 0) {
+            filter.stars = { $gte: minStars };
         }
 
-        // Search by skill name
-        if (search.trim()) {
-            queries.push(Query.search('skill_name', search.trim()));
-        }
-
-        // Filter by owner
         if (owner.trim()) {
-            queries.push(Query.equal('owner', owner.trim()));
+            filter.owner = owner.trim();
         }
 
-        const result = await db.listDocuments(DATABASE_ID, COLLECTION_ID, queries);
+        // Search: use regex for substring matching (partial words like "stan" → "standards")
+        // MongoDB's $text only matches complete words. At ~7-25K docs, regex is fast enough.
+        if (search.trim()) {
+            // Escape regex special chars in user input
+            const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const re = new RegExp(escaped, 'i');
+            filter.$or = [
+                { skill_name: re },
+                { owner: re },
+                { repo: re },
+                { repo_description: re },
+            ];
+        }
 
-        // Map to clean response (strip Appwrite internals)
-        const skills = result.documents.map(doc => ({
-            id: doc.$id,
+        // ── Build sort ──────────────────────────────────────────────
+        let sortSpec;
+        if (sort === 'recent') {
+            sortSpec = { last_indexed: -1 };
+        } else {
+            sortSpec = { stars: -1 };
+        }
+
+        // ── Execute query + count in parallel ───────────────────────
+        const [docs, total] = await Promise.all([
+            coll.find(filter)
+                .sort(sortSpec)
+                .skip(skipNum)
+                .limit(limitNum)
+                .project({
+                    _id: 1,
+                    skill_key: 1,
+                    skill_name: 1,
+                    repo: 1,
+                    file_path: 1,
+                    folder_path: 1,
+                    owner: 1,
+                    owner_avatar: 1,
+                    repo_description: 1,
+                    stars: 1,
+                    html_url: 1,
+                    language: 1,
+                    topics: 1,
+                    last_indexed: 1,
+                })
+                .toArray(),
+            coll.countDocuments(filter),
+        ]);
+
+        // Map _id to string id for frontend compatibility
+        const skills = docs.map(doc => ({
+            id: doc._id.toString(),
             skill_key: doc.skill_key,
             skill_name: doc.skill_name,
             repo: doc.repo,
@@ -93,13 +116,15 @@ export default async function handler(req, res) {
         res.setHeader('Cache-Control', 's-maxage=600, stale-while-revalidate=300');
 
         return res.status(200).json({
-            total: result.total,
+            total,              // ← REAL count, no 5000 cap
             page: pageNum,
             limit: limitNum,
+            totalPages: Math.ceil(total / limitNum),
             skills,
+            hasMore: skipNum + skills.length < total,
         });
     } catch (err) {
-        console.error('Query error:', err.message);
+        console.error('MongoDB query error:', err.message);
         return res.status(500).json({ error: err.message });
     }
 }

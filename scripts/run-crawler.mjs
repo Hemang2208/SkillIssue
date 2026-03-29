@@ -7,11 +7,10 @@
  *   node scripts/run-crawler.mjs
  *
  * Required env vars:
- *   APPWRITE_API_KEY, GITHUB_TOKEN (or VITE_GITHUB_TOKEN)
+ *   MONGODB_URI, GITHUB_TOKEN (or VITE_GITHUB_TOKEN)
  *
  * Optional:
- *   APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID, APPWRITE_DATABASE_ID,
- *   APPWRITE_GITHUB_SKILLS_ID
+ *   MONGODB_DB
  */
 
 import { runCrawl } from '../api/cron/index-skills.js';

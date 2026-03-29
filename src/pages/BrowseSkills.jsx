@@ -1032,6 +1032,16 @@ export default function BrowseSkills() {
     const OC_PAGE_SIZE = 48
     const [ocPage, setOcPage] = useState(1)
 
+    // Debounced search for server-side queries (indexed + DB skills)
+    const [debouncedSearch, setDebouncedSearch] = useState('')
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearch(searchQuery), 250)
+        return () => clearTimeout(timer)
+    }, [searchQuery])
+
+    // True while user is still typing and server hasn't re-fetched yet
+    const isSearchPending = searchQuery !== debouncedSearch
+
     // ─ DB community skills state
     const [dbSkills, setDbSkills] = useState([])
     const [dbProfiles, setDbProfiles] = useState({}) // user_id → profile
@@ -1039,11 +1049,13 @@ export default function BrowseSkills() {
     const [dbSort, setDbSort] = useState('recent')
     const [selectedDbSkill, setSelectedDbSkill] = useState(null)
 
-    // ─ Indexed skills state (GitHub crawler)
+    // ─ Indexed skills state (GitHub crawler) — cursor-based pagination
     const [indexedSkills, setIndexedSkills] = useState([])
     const [indexedTotal, setIndexedTotal] = useState(0)
     const [indexedLoading, setIndexedLoading] = useState(true)
-    const [indexedPage, setIndexedPage] = useState(1)
+    const [indexedHasMore, setIndexedHasMore] = useState(true)
+    const [indexedPage, setIndexedPage] = useState(1)          // current page (MongoDB page-based)
+    const prevIndexedSearchRef = useRef(debouncedSearch)
     const INDEXED_PAGE_SIZE = 48
 
     // Backward-compat: redirect old /browse?repo=...&path=... share links
@@ -1102,7 +1114,7 @@ export default function BrowseSkills() {
     // Fetch DB community skills + uploader profiles
     useEffect(() => {
         setDbLoading(true)
-        getAllPublicSkills(dbSort)
+        getAllPublicSkills(dbSort, 100, debouncedSearch)
             .then(async (skills) => {
                 setDbSkills(skills)
                 const userIds = skills.map(s => s.user_id).filter(Boolean)
@@ -1111,26 +1123,50 @@ export default function BrowseSkills() {
             })
             .catch(console.error)
             .finally(() => setDbLoading(false))
-    }, [dbSort])
+    }, [dbSort, debouncedSearch])
 
-    // Fetch indexed skills (from GitHub crawler)
+    // Fetch indexed skills (from GitHub crawler via MongoDB API) — page-based pagination
+    // Single effect: handles first page, search resets, and load-more.
     useEffect(() => {
+        // Detect search change → reset to page 1
+        if (prevIndexedSearchRef.current !== debouncedSearch) {
+            prevIndexedSearchRef.current = debouncedSearch
+            // If already on page 1, fetch still runs via the dependency.
+            // Otherwise, setting page=1 triggers the effect.
+            if (indexedPage !== 1) { setIndexedPage(1); return }
+        }
+
         setIndexedLoading(true)
-        fetchIndexedSkills({ page: indexedPage, limit: INDEXED_PAGE_SIZE, sort: 'stars' })
+        fetchIndexedSkills({
+            limit: INDEXED_PAGE_SIZE,
+            page: indexedPage,
+            sort: 'stars',
+            search: debouncedSearch,
+            min_stars: 0,
+        })
             .then(data => {
+                const shaped = data.skills.map(toFeaturedSkillShape)
                 if (indexedPage === 1) {
-                    setIndexedSkills(data.skills.map(toFeaturedSkillShape))
+                    // First page (or reset) — replace
+                    setIndexedSkills(shaped)
                 } else {
-                    setIndexedSkills(prev => [...prev, ...data.skills.map(toFeaturedSkillShape)])
+                    // Subsequent page — append
+                    setIndexedSkills(prev => [...prev, ...shaped])
                 }
-                setIndexedTotal(data.total)
+                setIndexedTotal(data.total)    // ← real count from MongoDB, no cap
+                setIndexedHasMore(data.hasMore)
             })
             .catch(err => console.error('[Browse] Indexed skills fetch failed:', err))
             .finally(() => setIndexedLoading(false))
-    }, [indexedPage])
+    }, [indexedPage, debouncedSearch])
 
     // Reset pagination when search/filter changes
-    useEffect(() => { setOcPage(1); setIndexedPage(1) }, [searchQuery, activeFilter])
+    useEffect(() => { setOcPage(1) }, [searchQuery, activeFilter])
+    // Reset indexed pagination when filter changes (search reset handled inside effect)
+    useEffect(() => {
+        setIndexedHasMore(true)
+        setIndexedPage(1)
+    }, [activeFilter])
 
     // Special Skill Issue filter ID
     const SKILL_ISSUE_FILTER = 'Skill Issue'
@@ -1149,7 +1185,7 @@ export default function BrowseSkills() {
     const filteredOfficial = officialSkills.filter((s) => {
         if (isCommunityFilter || isSkillIssueFilter || isDiscoveredFilter) return false
         const matchesCompany = activeFilter === 'All' || s.company === activeFilter
-        const matchesSearch = !q || s.displayName.toLowerCase().includes(q) || s.name.toLowerCase().includes(q) || s.company.toLowerCase().includes(q)
+        const matchesSearch = !q || s.displayName.toLowerCase().includes(q) || s.name.toLowerCase().includes(q) || s.company.toLowerCase().includes(q) || s.repo?.toLowerCase().includes(q) || s.repoDescription?.toLowerCase().includes(q)
         return matchesCompany && matchesSearch
     })
 
@@ -1180,15 +1216,13 @@ export default function BrowseSkills() {
     })
 
     // Filter indexed skills — show for All or Discovered filter
+    // Server (MongoDB) already does text search via debouncedSearch, so we
+    // ONLY filter by tab here. No client-side search filtering — that caused
+    // results to flash/disappear while typing because q (instant) diverged
+    // from debouncedSearch (delayed).
     const filteredIndexed = indexedSkills.filter((s) => {
         if (!isDiscoveredFilter && activeFilter !== 'All') return false
-        if (!q) return true
-        return (
-            s.displayName.toLowerCase().includes(q) ||
-            s.name.toLowerCase().includes(q) ||
-            s.company.toLowerCase().includes(q) ||
-            s.author?.toLowerCase().includes(q)
-        )
+        return true
     })
 
     const totalCount = officialSkills.length + communitySkills.length + openClawSkills.length + indexedTotal
@@ -1703,26 +1737,37 @@ export default function BrowseSkills() {
                                     <div className="flex-1 h-[1px] bg-gradient-to-r from-transparent via-amber-500/20 to-transparent" />
                                 </div>
                                 {/* Cards */}
-                                {indexedLoading && indexedSkills.length === 0 ? (
+                                {(indexedLoading || isSearchPending) && indexedSkills.length === 0 ? (
                                     Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={`sk-indexed-${i}`} />)
                                 ) : (() => {
                                     const isExpanded = expandedSources.has('Discovered')
                                     const showLimit = activeFilter === 'All' && !isExpanded && !q
                                     const displaySkills = showLimit ? filteredIndexed.slice(0, INITIAL_PER_SOURCE) : filteredIndexed
                                     const hasMoreInitial = showLimit && filteredIndexed.length > INITIAL_PER_SOURCE
-                                    const hasMorePaged = !showLimit && indexedTotal > indexedSkills.length
+                                    const hasMorePaged = !showLimit && indexedHasMore
+                                    // Show a subtle loading overlay when search is in-flight
+                                    // but we still have stale results to display (avoids blank screen)
+                                    const showSearchingOverlay = (indexedLoading || isSearchPending) && indexedSkills.length > 0
 
                                     return (
                                         <>
-                                            {displaySkills.map((skill) => (
-                                                <FeaturedSkillCard
-                                                    key={`indexed:${skill.repo}:${skill.path}`}
-                                                    skill={skill}
-                                                    onClick={setSelectedSkill}
-                                                    onDownload={handleDownload}
-                                                    isDownloading={downloadingId === `${skill.repo}:${skill.path}`}
-                                                />
-                                            ))}
+                                            {showSearchingOverlay ? (
+                                                <div className="col-span-1 sm:col-span-2 lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                    {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={`sk-search-${i}`} />)}
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    {displaySkills.map((skill) => (
+                                                        <FeaturedSkillCard
+                                                            key={`indexed:${skill.repo}:${skill.path}`}
+                                                            skill={skill}
+                                                            onClick={setSelectedSkill}
+                                                            onDownload={handleDownload}
+                                                            isDownloading={downloadingId === `${skill.repo}:${skill.path}`}
+                                                        />
+                                                    ))}
+                                                </>
+                                            )}
                                             {hasMoreInitial && (
                                                 <div className="col-span-1 sm:col-span-2 lg:col-span-3 flex justify-center py-1">
                                                     <button
@@ -1772,7 +1817,7 @@ export default function BrowseSkills() {
                 )}
 
                 {/* ── Empty state ─────────────────────────────────────────── */}
-                {!loading && !dbLoading && filteredOfficial.length === 0 && filteredCommunity.length === 0 && filteredOpenClaw.length === 0 && filteredDbSkills.length === 0 && filteredIndexed.length === 0 && (
+                {!loading && !dbLoading && !indexedLoading && !isSearchPending && filteredOfficial.length === 0 && filteredCommunity.length === 0 && filteredOpenClaw.length === 0 && filteredDbSkills.length === 0 && filteredIndexed.length === 0 && (
                     <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
                         <div className="w-14 h-14 rounded-2xl bg-accent/5 border border-accent/10 flex items-center justify-center">
                             <svg className="w-6 h-6 text-accent/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

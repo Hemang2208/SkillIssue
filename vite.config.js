@@ -373,10 +373,10 @@ Produce a skill file that an AI agent could pick up and immediately use to produ
     }
 }
 
-// Custom plugin: intercepts GET /api/github-skills and queries Appwrite directly in dev mode
+// Dev proxy: forward /api/github-skills to the local Vercel-like handler.
+// In production, Vercel routes this to api/github-skills.js natively.
 function githubSkillsPlugin() {
     let envVars = {}
-
     return {
         name: 'github-skills-proxy',
         configResolved(config) {
@@ -384,70 +384,39 @@ function githubSkillsPlugin() {
         },
         configureServer(server) {
             server.middlewares.use(async (req, res, next) => {
-                if (!req.url?.startsWith('/api/github-skills') || req.method !== 'GET') {
-                    return next()
-                }
-
-                const apiKey = envVars.APPWRITE_API_KEY
-                if (!apiKey) {
-                    res.writeHead(500, { 'Content-Type': 'application/json' })
-                    res.end(JSON.stringify({ error: 'APPWRITE_API_KEY not configured in .env' }))
-                    return
-                }
+                if (!req.url?.startsWith('/api/github-skills')) return next()
 
                 try {
-                    // Dynamic import to avoid bundling server SDK in client
-                    const { Client, Databases, Query } = await import('node-appwrite')
+                    // Inject env vars into process.env so api/lib/mongodb.js can read them
+                    if (envVars.MONGODB_URI && !process.env.MONGODB_URI) {
+                        process.env.MONGODB_URI = envVars.MONGODB_URI
+                    }
+                    if (envVars.MONGODB_DB && !process.env.MONGODB_DB) {
+                        process.env.MONGODB_DB = envVars.MONGODB_DB
+                    }
 
+                    // Dynamic import so the handler code isn't bundled into the client
+                    const { default: handler } = await import('./api/github-skills.js')
+
+                    // Parse query string from the URL
                     const url = new URL(req.url, 'http://localhost')
-                    const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'))
-                    const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '25')))
-                    const offset = (page - 1) * limit
-                    const sort = url.searchParams.get('sort') || 'stars'
-                    const search = url.searchParams.get('search') || ''
-                    const owner = url.searchParams.get('owner') || ''
-                    const minStars = parseInt(url.searchParams.get('min_stars') || '0')
+                    const query = Object.fromEntries(url.searchParams.entries())
 
-                    const projectId = envVars.APPWRITE_PROJECT_ID || envVars.VITE_APPWRITE_PROJECT_ID
-                    const client = new Client()
-                        .setEndpoint(envVars.APPWRITE_ENDPOINT || 'https://fra.cloud.appwrite.io/v1')
-                        .setProject(projectId)
-                        .setKey(apiKey)
-
-                    const db = new Databases(client)
-                    const queries = [
-                        Query.greaterThanEqual('stars', minStars),
-                        Query.limit(limit),
-                        Query.offset(offset),
-                    ]
-                    if (sort === 'recent') queries.push(Query.orderDesc('last_indexed'))
-                    else queries.push(Query.orderDesc('stars'))
-                    if (search.trim()) queries.push(Query.search('skill_name', search.trim()))
-                    if (owner.trim()) queries.push(Query.equal('owner', owner.trim()))
-
-                    const result = await db.listDocuments('skill-issue-db', 'github_skills', queries)
-
-                    const skills = result.documents.map(doc => ({
-                        id: doc.$id,
-                        skill_key: doc.skill_key,
-                        skill_name: doc.skill_name,
-                        repo: doc.repo,
-                        file_path: doc.file_path,
-                        folder_path: doc.folder_path,
-                        owner: doc.owner,
-                        owner_avatar: doc.owner_avatar,
-                        repo_description: doc.repo_description,
-                        stars: doc.stars,
-                        html_url: doc.html_url,
-                        language: doc.language,
-                        topics: doc.topics || [],
-                        last_indexed: doc.last_indexed,
-                    }))
-
-                    res.writeHead(200, { 'Content-Type': 'application/json' })
-                    res.end(JSON.stringify({ total: result.total, page, limit, skills }))
+                    // Minimal req/res shim to mimic Vercel handler signature
+                    const fakeReq = { method: req.method, query, headers: req.headers }
+                    const fakeRes = {
+                        _status: 200,
+                        _headers: {},
+                        status(code) { this._status = code; return this },
+                        setHeader(k, v) { this._headers[k] = v; return this },
+                        json(data) {
+                            res.writeHead(this._status, { 'Content-Type': 'application/json', ...this._headers })
+                            res.end(JSON.stringify(data))
+                        },
+                    }
+                    await handler(fakeReq, fakeRes)
                 } catch (err) {
-                    console.error('[github-skills-proxy]', err.message)
+                    console.error('[github-skills-proxy] Error:', err)
                     res.writeHead(500, { 'Content-Type': 'application/json' })
                     res.end(JSON.stringify({ error: err.message }))
                 }

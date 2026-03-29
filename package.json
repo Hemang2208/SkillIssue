@@ -7,7 +7,8 @@
         "dev": "vite",
         "build": "vite build",
         "preview": "vite preview",
-        "crawl": "node scripts/run-crawler.mjs"
+        "crawl": "node scripts/run-crawler.mjs",
+        "migrate:mongo": "node scripts/migrate-github-skills-to-mongo.mjs"
     },
     "dependencies": {
         "@supabase/supabase-js": "^2.97.0",
@@ -15,6 +16,7 @@
         "framer-motion": "^12.35.0",
         "jszip": "^3.10.1",
         "lucide-react": "^0.575.0",
+        "mongodb": "^7.1.1",
         "next-themes": "^0.4.6",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",

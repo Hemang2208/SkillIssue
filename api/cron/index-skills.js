@@ -7,7 +7,7 @@
  *   2. GraphQL batch (50/call) → filter repos by ≥MIN_STARS, get metadata
  *   3. Trees API → for each starred repo, find ALL SKILL.md files (not just
  *      the one Code Search returned). Repos like udecode/plate have 400+ skills.
- *   4. Parse + dedup + parallel-batch upsert into Appwrite
+ *   4. Parse + dedup + parallel-batch upsert into MongoDB Atlas
  *
  * Skips: openclaw/skills (user already fetches 7K skills from clawhub)
  * Cap: MAX_SKILLS_PER_REPO to avoid spam repos
@@ -17,17 +17,16 @@
  * GitHub Actions. Vercel Hobby has 60s timeout — use for quick refresh only.
  */
 
-import { Client, Databases, Query, ID } from 'node-appwrite';
+import { MongoClient } from 'mongodb';
 
 // ─── Config ─────────────────────────────────────────────────────────────
-const APPWRITE_ENDPOINT = process.env.APPWRITE_ENDPOINT || 'https://fra.cloud.appwrite.io/v1';
-const APPWRITE_PROJECT_ID = process.env.APPWRITE_PROJECT_ID || process.env.VITE_APPWRITE_PROJECT_ID;
-const APPWRITE_API_KEY = process.env.APPWRITE_API_KEY;
+const MONGODB_URI = process.env.MONGODB_URI;
+const MONGODB_DB  = process.env.MONGODB_DB || 'skillissue';
+
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || process.env.VITE_GITHUB_TOKEN;
 const CRON_SECRET = process.env.CRON_SECRET;
 
-const DATABASE_ID = process.env.APPWRITE_DATABASE_ID || process.env.VITE_APPWRITE_DATABASE_ID || 'skill-issue-db';
-const COLLECTION_ID = process.env.APPWRITE_GITHUB_SKILLS_ID || process.env.VITE_APPWRITE_GITHUB_SKILLS_TABLE_ID || 'github_skills';
+const COLLECTION_ID = 'github_skills';
 
 const MIN_STARS = 10;
 const MAX_SKILLS_PER_REPO = 500;
@@ -257,56 +256,53 @@ async function deepScanRepos(starredRepos) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// STEP 4: Parallel-batch upsert into Appwrite
+// STEP 4: Bulk upsert into MongoDB Atlas
 // ═══════════════════════════════════════════════════════════════════════
-async function upsertSkills(db, skills) {
-    let created = 0, updated = 0, errors = 0;
+async function upsertSkills(coll, skills) {
+    let inserted = 0, modified = 0, errors = 0;
     const total = skills.length;
-    const BATCH = 10;
+    const BATCH = 500;
 
-    console.log(`\n📝  Upserting ${total} skills (${BATCH} parallel)...`);
+    console.log(`\n📝  Upserting ${total} skills into MongoDB (batch of ${BATCH})...`);
 
     for (let i = 0; i < total; i += BATCH) {
         const batch = skills.slice(i, i + BATCH);
-        const results = await Promise.allSettled(batch.map(async (skill) => {
-            const existing = await db.listDocuments(DATABASE_ID, COLLECTION_ID,
-                [Query.equal('skill_key', skill.skill_key), Query.limit(1)]);
-            if (existing.total > 0) {
-                await db.updateDocument(DATABASE_ID, COLLECTION_ID, existing.documents[0].$id, {
-                    stars: skill.stars, repo_description: skill.repo_description,
-                    language: skill.language, topics: skill.topics,
-                    last_indexed: skill.last_indexed, owner_avatar: skill.owner_avatar,
-                });
-                return 'updated';
-            } else {
-                await db.createDocument(DATABASE_ID, COLLECTION_ID, ID.unique(), skill);
-                return 'created';
-            }
+        const ops = batch.map(skill => ({
+            updateOne: {
+                filter: { skill_key: skill.skill_key },
+                update: { $set: skill },
+                upsert: true,
+            },
         }));
 
-        results.forEach(r => {
-            if (r.status === 'fulfilled') r.value === 'created' ? created++ : updated++;
-            else { errors++; if (errors <= 5) console.error(`  ❌ ${r.reason?.message?.slice(0, 120)}`); }
-        });
+        try {
+            const result = await coll.bulkWrite(ops, { ordered: false });
+            inserted += result.upsertedCount;
+            modified += result.modifiedCount;
+        } catch (err) {
+            // bulkWrite with ordered:false reports errors but still processes the rest
+            errors += (err.writeErrors?.length || 1);
+            if (errors <= 5) console.error(`  ❌ ${err.message?.slice(0, 120)}`);
+        }
 
-        if ((i + BATCH) % 100 < BATCH || i + BATCH >= total) {
-            console.log(`    ${Math.min(i + BATCH, total)}/${total}  (new: ${created}, updated: ${updated}, err: ${errors})`);
+        if ((i + BATCH) % 1000 < BATCH || i + BATCH >= total) {
+            console.log(`    ${Math.min(i + BATCH, total)}/${total}  (new: ${inserted}, updated: ${modified}, err: ${errors})`);
         }
     }
-    return { created, updated, errors };
+    return { created: inserted, updated: modified, errors };
 }
 
 // ═══════════════════════════════════════════════════════════════════════
 // CORE CRAWL LOGIC (used by both Vercel handler and CLI runner)
 // ═══════════════════════════════════════════════════════════════════════
 export async function runCrawl() {
-    if (!APPWRITE_API_KEY) throw new Error('APPWRITE_API_KEY not configured');
+    if (!MONGODB_URI) throw new Error('MONGODB_URI not configured');
     if (!GITHUB_TOKEN) throw new Error('GITHUB_TOKEN not configured');
 
     const t0 = Date.now();
     console.log(`\n🔍  Skill Crawler v4 (Deep Discovery) starting...`);
     console.log(`   Min stars: ${MIN_STARS} | Max per repo: ${MAX_SKILLS_PER_REPO}`);
-    console.log(`   DB: ${DATABASE_ID}/${COLLECTION_ID}`);
+    console.log(`   MongoDB: ${MONGODB_DB}/${COLLECTION_ID}`);
     console.log(`   Skipping: ${[...SKIP_REPOS].join(', ')}`);
 
     // 1. Size-partitioned Code Search → unique repos
@@ -325,21 +321,38 @@ export async function runCrawl() {
     console.log(`\n🎯  ${uniqueSkills.length} unique skills after dedup`);
     if (!uniqueSkills.length) return { message: 'No skills found', created: 0, updated: 0, errors: 0 };
 
-    // 5. Upsert into Appwrite
-    const client = new Client().setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID).setKey(APPWRITE_API_KEY);
-    const result = await upsertSkills(new Databases(client), uniqueSkills);
+    // 5. Connect to MongoDB and upsert
+    const mongoClient = new MongoClient(MONGODB_URI, {
+        maxPoolSize: 5,
+        serverSelectionTimeoutMS: 10_000,
+    });
+    try {
+        await mongoClient.connect();
+        const db = mongoClient.db(MONGODB_DB);
+        const coll = db.collection(COLLECTION_ID);
 
-    const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
-    console.log(`\n✅  Done in ${elapsed}s! New: ${result.created}, Updated: ${result.updated}, Errors: ${result.errors}`);
+        // Ensure the unique index exists (idempotent)
+        await coll.createIndex({ skill_key: 1 }, { unique: true, name: 'idx_skill_key' });
 
-    return {
-        message: 'Crawl complete',
-        elapsed_seconds: Number(elapsed),
-        repos_discovered: repoNames.length,
-        repos_starred: starredRepos.size,
-        total_skills: uniqueSkills.length,
-        ...result,
-    };
+        const result = await upsertSkills(coll, uniqueSkills);
+
+        const totalInDb = await coll.countDocuments();
+        const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+        console.log(`\n✅  Done in ${elapsed}s! New: ${result.created}, Updated: ${result.updated}, Errors: ${result.errors}`);
+        console.log(`    Total skills in MongoDB: ${totalInDb}`);
+
+        return {
+            message: 'Crawl complete',
+            elapsed_seconds: Number(elapsed),
+            repos_discovered: repoNames.length,
+            repos_starred: starredRepos.size,
+            total_skills: uniqueSkills.length,
+            total_in_db: totalInDb,
+            ...result,
+        };
+    } finally {
+        await mongoClient.close();
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
