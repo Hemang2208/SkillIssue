@@ -35,7 +35,7 @@ const MD = {
     thead: ({ children }) => <thead className="border-b border-white/10">{children}</thead>,
     th: ({ children }) => <th className="text-left py-2 px-3 text-white/70 font-semibold text-xs uppercase tracking-wide">{children}</th>,
     td: ({ children }) => <td className="py-2 px-3 text-white/50 border-t border-white/[0.05]">{children}</td>,
-    img: ({ src, alt }) => <img src={src} alt={alt} className="max-w-full rounded-lg my-3" />,
+    img: ({ src, alt }) => <img src={src} alt={alt} loading="lazy" className="max-w-full rounded-lg my-3" />,
 }
 
 export default function GitHubSkillPage() {
@@ -259,6 +259,9 @@ export default function GitHubSkillPage() {
                             <img
                                 src={avatarUrl}
                                 alt={repoOwner}
+                                loading="lazy"
+                                width={40}
+                                height={40}
                                 className="w-10 h-10 rounded-lg border border-white/10 object-cover shrink-0"
                             />
                         )}

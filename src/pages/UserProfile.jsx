@@ -472,6 +472,9 @@ export default function UserProfile() {
                                                 <img
                                                     src={avatarUrl}
                                                     alt={displayName}
+                                                    loading="lazy"
+                                                    width={128}
+                                                    height={128}
                                                     className="relative w-32 h-32 rounded-full border-2 border-navy object-cover shadow-[0_0_40px_rgba(75,169,255,0.15)]"
                                                     onError={() => setImgError(true)}
                                                 />

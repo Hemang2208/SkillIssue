@@ -18,7 +18,7 @@ const ReviewCard = ({ img, name, username, body }) => {
                         className="w-8 h-8 shrink-0 rounded-full object-cover opacity-90"
                         width="32"
                         height="32"
-                        alt=""
+                        alt={name}
                         src={img || FALLBACK_AVATAR(name)}
                         onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_AVATAR(name) }}
                         referrerPolicy="no-referrer"

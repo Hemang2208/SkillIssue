@@ -51,6 +51,8 @@ function SocialProof() {
                             key={i}
                             src={u.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(u.username || 'u')}`}
                             alt={u.display_name || u.username || 'user'}
+                            width={32}
+                            height={32}
                             className="w-8 h-8 rounded-full border-2 border-navy object-cover bg-navy-200"
                         />
                     ))
@@ -179,6 +181,8 @@ export default function Hero() {
                         <img
                             src={logo.overrideSrc || `https://cdn.simpleicons.org/${logo.icon}/${logo.color.replace('#', '')}`}
                             alt={logo.name}
+                            width={40}
+                            height={40}
                             className={logo.overrideSrc ? "w-9 h-9 object-contain rounded-md" : "w-10 h-10 object-contain"}
                             style={logo.overrideSrc ? { filter: `drop-shadow(0 0 6px ${logo.color}50)` } : { filter: `drop-shadow(0 0 8px ${logo.color}70)` }}
                         />
@@ -248,6 +252,8 @@ export default function Hero() {
                             <img
                                 src="/megamind.png"
                                 alt="Megamind — Does your AI have a skill issue?"
+                                width={512}
+                                height={512}
                                 className="relative z-10 w-full max-w-md lg:max-w-lg rounded-2xl object-cover object-top"
                                 style={{
                                     filter: 'drop-shadow(0 0 60px rgba(75, 169, 255, 0.15))',

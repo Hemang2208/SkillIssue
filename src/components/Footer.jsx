@@ -11,6 +11,9 @@ export default function Footer() {
                             <img
                                 src="/skill-issue-white.png"
                                 alt="Skill Issue"
+                                loading="lazy"
+                                width={132}
+                                height={32}
                                 className="h-8 w-auto"
                             />
                         </div>
@@ -125,6 +128,9 @@ export default function Footer() {
                         <img
                             src="/bajpailogo.png"
                             alt="Bajpai Tech logo — developed by Abhishek Bajpai"
+                            loading="lazy"
+                            width={100}
+                            height={24}
                             className="h-6 sm:h-7 w-auto opacity-70 group-hover:opacity-100 transition-opacity duration-300"
                         />
                     </a>

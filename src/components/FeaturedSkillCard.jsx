@@ -31,6 +31,9 @@ function OfficialCard({ skill, onClick, onDownload, isDownloading }) {
                     <img
                         src={getOrgAvatarUrl(repo)}
                         alt={company}
+                        loading="lazy"
+                        width={28}
+                        height={28}
                         className="w-7 h-7 rounded-lg border border-white/10 bg-white/5"
                     />
                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-satoshi font-bold border ${cc.badge} uppercase tracking-wider`}>
@@ -124,6 +127,9 @@ function CommunityCard({ skill, onClick, onDownload, isDownloading }) {
                     <img
                         src={getUserAvatarUrl(author)}
                         alt={author}
+                        loading="lazy"
+                        width={28}
+                        height={28}
                         className="w-7 h-7 rounded-full border border-white/10 bg-white/5"
                     />
                     {/* Attribution: username/skill-name clickable link */}
@@ -222,6 +228,9 @@ function IndexedCard({ skill, onClick, onDownload, isDownloading }) {
                     <img
                         src={ownerAvatar || `https://avatars.githubusercontent.com/${company}`}
                         alt={company}
+                        loading="lazy"
+                        width={28}
+                        height={28}
                         className="w-7 h-7 rounded-lg border border-white/10 bg-white/5"
                     />
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-satoshi font-bold border bg-amber-500/10 text-amber-300 border-amber-500/20 uppercase tracking-wider">

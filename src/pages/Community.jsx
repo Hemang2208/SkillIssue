@@ -53,6 +53,9 @@ function Avatar({ src, name }) {
                     src={src}
                     alt={name}
                     onError={() => setErr(true)}
+                    loading="lazy"
+                    width={64}
+                    height={64}
                     className="w-16 h-16 rounded-full object-cover border-2 border-accent/30 group-hover:border-accent/60 transition-colors duration-300"
                 />
             ) : (

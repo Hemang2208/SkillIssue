@@ -697,6 +697,7 @@ export default function SkillBuilder() {
                                             <img
                                                 src={img.base64DataUri}
                                                 alt={img.fileName}
+                                                loading="lazy"
                                                 className={`object-cover rounded-lg border border-white/10 ${showOutput ? 'h-12 w-12' : 'h-20 w-20 rounded-xl'}`}
                                             />
                                             <button
@@ -990,7 +991,7 @@ export default function SkillBuilder() {
                                                     thead: ({ children }) => <thead className="border-b border-white/10">{children}</thead>,
                                                     th: ({ children }) => <th className="text-left py-2 px-3 text-white/70 font-semibold text-xs uppercase tracking-wide">{children}</th>,
                                                     td: ({ children }) => <td className="py-2 px-3 text-white/50 border-t border-white/[0.05]">{children}</td>,
-                                                    img: ({ src, alt }) => <img src={src} alt={alt} className="max-w-full rounded-lg my-3" />,
+                                                    img: ({ src, alt }) => <img src={src} alt={alt} loading="lazy" className="max-w-full rounded-lg my-3" />,
                                                 }}
                                             >
                                                 {generatedMarkdown}

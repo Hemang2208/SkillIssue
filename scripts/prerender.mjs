@@ -86,15 +86,24 @@ async function prerender() {
     console.log(`  📦 Serving dist/ on ${ORIGIN}`)
 
     // 2. Launch headless browser
-    const browser = await puppeteer.launch({
-        headless: 'new',
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-gpu',
-        ],
-    })
+    let browser
+    try {
+        browser = await puppeteer.launch({
+            headless: 'new',
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+                '--single-process',
+            ],
+        })
+    } catch (launchErr) {
+        console.error('  ⚠️  Could not launch browser:', launchErr.message)
+        console.error('  ℹ️  Puppeteer cache:', process.env.PUPPETEER_CACHE_DIR || '(default)')
+        server.close()
+        return
+    }
 
     let successCount = 0
 
@@ -115,6 +124,51 @@ async function prerender() {
 
             // Extra wait for helmet-async to inject meta tags
             await new Promise(r => setTimeout(r, 2000))
+
+            // Remove duplicate static meta tags in-page before extracting HTML
+            // react-helmet-async adds tags with data-rh="true"; remove the static originals
+            await page.evaluate(() => {
+                const head = document.head
+
+                // If helmet injected a canonical (data-rh), remove the static one
+                const helmetCanonical = head.querySelector('link[rel="canonical"][data-rh]')
+                if (helmetCanonical) {
+                    const staticCanonical = head.querySelector('link[rel="canonical"]:not([data-rh])')
+                    if (staticCanonical) staticCanonical.remove()
+                }
+
+                // Remove static description if helmet has one
+                const helmetDesc = head.querySelector('meta[name="description"][data-rh]')
+                if (helmetDesc) {
+                    const staticDesc = head.querySelector('meta[name="description"]:not([data-rh])')
+                    if (staticDesc) staticDesc.remove()
+                }
+
+                // Remove static OG tags if helmet has them
+                head.querySelectorAll('meta[property^="og:"]:not([data-rh])').forEach(el => {
+                    if (head.querySelector(`meta[property="${el.getAttribute('property')}"][data-rh]`)) {
+                        el.remove()
+                    }
+                })
+
+                // Remove static Twitter tags if helmet has them
+                head.querySelectorAll('meta[name^="twitter:"]:not([data-rh])').forEach(el => {
+                    if (head.querySelector(`meta[name="${el.getAttribute('name')}"][data-rh]`)) {
+                        el.remove()
+                    }
+                })
+
+                // Remove the HTML comments (Canonical, Open Graph, Twitter Card)
+                const walker = document.createTreeWalker(head, NodeFilter.SHOW_COMMENT)
+                const commentsToRemove = []
+                while (walker.nextNode()) {
+                    const text = walker.currentNode.textContent.trim()
+                    if (/^(Canonical|Open Graph|Twitter Card)$/.test(text)) {
+                        commentsToRemove.push(walker.currentNode)
+                    }
+                }
+                commentsToRemove.forEach(c => c.remove())
+            })
 
             // Get the fully rendered HTML
             let html = await page.content()

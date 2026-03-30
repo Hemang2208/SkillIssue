@@ -11,6 +11,8 @@ function AvatarImg({ src, name, size = 'w-8 h-8', textSize = 'text-xs' }) {
             <img
                 src={src}
                 alt={name}
+                width={32}
+                height={32}
                 className={`${size} rounded-full border border-accent/30 object-cover hover:border-accent transition-colors`}
                 onError={() => setErr(true)}
             />
@@ -89,6 +91,8 @@ export default function Navbar() {
                             <img
                                 src="/skill-issue-white.png"
                                 alt="Skill Issue"
+                                width={148}
+                                height={36}
                                 className="h-9 w-auto transition-transform duration-300 group-hover:scale-105"
                             />
                         </Link>
@@ -190,6 +194,8 @@ export default function Navbar() {
                             <img
                                 src="/skill-issue-white.png"
                                 alt="Skill Issue"
+                                width={148}
+                                height={36}
                                 className="h-9 w-auto transition-transform duration-300 group-hover:scale-105"
                             />
                         </Link>

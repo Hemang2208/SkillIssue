@@ -410,6 +410,9 @@ function SkillModal({ skill, onClose, authUser, authProfile }) {
                                     ? (skill.ownerAvatar || `https://avatars.githubusercontent.com/${skill.company}`)
                                     : getOrgAvatarUrl(skill.repo)}
                             alt={isOpenClaw ? skill.author : skill.company}
+                            loading="lazy"
+                            width={32}
+                            height={32}
                             className={`w-8 h-8 border border-white/10 ${isOpenClaw ? 'rounded-full' : 'rounded-lg'}`}
                         />
                         <div className="min-w-0">
@@ -646,7 +649,7 @@ function SkillModal({ skill, onClose, authUser, authProfile }) {
                                             thead: ({ children }) => <thead className="border-b border-white/10">{children}</thead>,
                                             th: ({ children }) => <th className="text-left py-2 px-3 text-white/70 font-semibold text-xs uppercase tracking-wide">{children}</th>,
                                             td: ({ children }) => <td className="py-2 px-3 text-white/50 border-t border-white/[0.05]">{children}</td>,
-                                            img: ({ src, alt }) => <img src={src} alt={alt} className="max-w-full rounded-lg my-3" />,
+                                            img: ({ src, alt }) => <img src={src} alt={alt} loading="lazy" className="max-w-full rounded-lg my-3" />,
                                         }}
                                     >
                                         {content}
@@ -922,6 +925,9 @@ function DbSkillCard({ skill, uploaderProfile, onClick, index = 0 }) {
                     <img
                         src={avatarUrl}
                         alt={username}
+                        loading="lazy"
+                        width={28}
+                        height={28}
                         className="w-7 h-7 rounded-full border border-white/10 bg-white/5 object-cover"
                     />
                     <button
@@ -1382,6 +1388,9 @@ export default function BrowseSkills() {
                                         <img
                                             src={avatarSrc}
                                             alt={name}
+                                            loading="lazy"
+                                            width={16}
+                                            height={16}
                                             className={`w-4 h-4 ${isSkillIssueTab ? 'rounded-md' : isCommunityTab ? 'rounded-full' : 'rounded'}`}
                                         />
                                     ) : null}
@@ -1491,6 +1500,9 @@ export default function BrowseSkills() {
                                             <img
                                                 src={getOrgAvatarUrl(source.repo)}
                                                 alt={source.company}
+                                                loading="lazy"
+                                                width={20}
+                                                height={20}
                                                 className="w-5 h-5 rounded object-cover opacity-70"
                                             />
                                             <span className="font-satoshi text-[11px] font-semibold text-white/20 tracking-widest uppercase">{source.company}</span>
@@ -1561,6 +1573,9 @@ export default function BrowseSkills() {
                                                 <img
                                                     src={`https://avatars.githubusercontent.com/${flatSource.company}`}
                                                     alt={flatSource.label}
+                                                    loading="lazy"
+                                                    width={20}
+                                                    height={20}
                                                     className="w-5 h-5 rounded-full border border-violet-500/30"
                                                 />
                                                 <span className="font-satoshi text-[11px] font-semibold text-white/30 tracking-widest uppercase">Community</span>
@@ -1730,6 +1745,9 @@ export default function BrowseSkills() {
                                             <img
                                                 src="https://avatars.githubusercontent.com/openclaw"
                                                 alt="OpenClaw"
+                                                loading="lazy"
+                                                width={20}
+                                                height={20}
                                                 className="w-5 h-5 rounded-full border border-violet-500/30"
                                             />
                                             <span className="font-satoshi text-[11px] font-semibold text-white/30 tracking-widest uppercase">Community</span>
