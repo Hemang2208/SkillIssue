@@ -10,7 +10,7 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import SEO, { jsonLdSchemas } from '../components/SEO'
 import Breadcrumbs from '../components/Breadcrumbs'
 
-const SITE = import.meta.env.VITE_SITE_URL || 'https://skillissue.bajpai.tech'
+const SITE = import.meta.env.VITE_SITE_URL || 'https://www.skillissue.bajpai.tech'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function starKey(userId, skillId) { return `starred:${userId}:${skillId}` }

@@ -23,7 +23,7 @@ function splitMarkdown(md = '') {
     return { preview, rest }
 }
 
-const SITE = 'https://skillissue.bajpai.tech'
+const SITE = 'https://www.skillissue.bajpai.tech'
 function skillShareUrl(id) { return `${SITE}/skill/${id}` }
 
 // Module-level: persists the last-used modal size for the whole browser session

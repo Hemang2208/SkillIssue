@@ -27,7 +27,7 @@ export default function SkillCard({ skill, onCopy, onClick, onDelete, onMakePriv
 
     async function handleShare(e) {
         e.stopPropagation()
-        const url = `${import.meta.env.VITE_SITE_URL || 'https://skillissue.bajpai.tech'}/skill/${id}`
+        const url = `${import.meta.env.VITE_SITE_URL || 'https://www.skillissue.bajpai.tech'}/skill/${id}`
         if (navigator.share) {
             try { await navigator.share({ title, url }) } catch { /* cancelled */ }
         } else {
