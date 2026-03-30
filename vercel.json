@@ -1,6 +1,13 @@
 {
     "buildCommand": "npm run build",
     "outputDirectory": "dist",
+    "redirects": [
+        {
+            "source": "/robot.txt",
+            "destination": "/robots.txt",
+            "statusCode": 301
+        }
+    ],
     "rewrites": [
         {
             "source": "/sitemap.xml",
