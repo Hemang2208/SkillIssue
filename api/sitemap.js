@@ -47,14 +47,15 @@ export default async function handler(req, res) {
             const skills = await coll.find(
                 {},
                 {
-                    projection: { owner: 1, repo: 1, path: 1, indexed_at: 1 },
+                    projection: { repo: 1, folder_path: 1, indexed_at: 1 },
                     sort: { stars: -1 },
                     limit: 10000,
                 }
             ).toArray()
 
             for (const skill of skills) {
-                const skillUrl = `${SITE_URL}/skill/github?repo=${encodeURIComponent(skill.owner + '/' + skill.repo)}&amp;path=${encodeURIComponent(skill.path || '')}`
+                // repo is already "owner/reponame", folder_path is the path within the repo
+                const skillUrl = `${SITE_URL}/skill/github?repo=${encodeURIComponent(skill.repo)}&amp;path=${encodeURIComponent(skill.folder_path || '')}`
                 const lastmod = skill.indexed_at ? new Date(skill.indexed_at).toISOString().split('T')[0] : ''
                 urls.push(`
     <url>
