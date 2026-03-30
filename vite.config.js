@@ -506,6 +506,11 @@ export default defineConfig({
             },
             workbox: {
                 globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+                navigateFallbackDenylist: [
+                    /^\/robots\.txt$/,
+                    /^\/sitemap\.xml$/,
+                    /^\/api\//,
+                ],
                 runtimeCaching: [
                     {
                         urlPattern: /^https:\/\/api\.fontshare\.com\/.*/i,
