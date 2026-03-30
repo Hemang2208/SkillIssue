@@ -54,7 +54,7 @@ export default async function handler(req, res) {
             ).toArray()
 
             for (const skill of skills) {
-                const skillUrl = `${SITE_URL}/skill/github?repo=${encodeURIComponent(skill.owner + '/' + skill.repo)}&path=${encodeURIComponent(skill.path || '')}`
+                const skillUrl = `${SITE_URL}/skill/github?repo=${encodeURIComponent(skill.owner + '/' + skill.repo)}&amp;path=${encodeURIComponent(skill.path || '')}`
                 const lastmod = skill.indexed_at ? new Date(skill.indexed_at).toISOString().split('T')[0] : ''
                 urls.push(`
     <url>

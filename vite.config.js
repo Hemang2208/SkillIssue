@@ -1,6 +1,5 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
-import Sitemap from 'vite-plugin-sitemap'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // Custom plugin: intercepts POST /api/generate and proxies to Groq API
@@ -425,16 +424,59 @@ function githubSkillsPlugin() {
     }
 }
 
+// Dev proxy: serve /sitemap.xml and /api/sitemap locally (mirrors Vercel rewrite)
+function sitemapPlugin() {
+    let envVars = {}
+    return {
+        name: 'sitemap-proxy',
+        configResolved(config) {
+            envVars = loadEnv(config.mode, config.root, '')
+        },
+        configureServer(server) {
+            server.middlewares.use(async (req, res, next) => {
+                if (req.url !== '/sitemap.xml' && req.url !== '/api/sitemap') return next()
+
+                try {
+                    if (envVars.MONGODB_URI && !process.env.MONGODB_URI) {
+                        process.env.MONGODB_URI = envVars.MONGODB_URI
+                    }
+                    if (envVars.MONGODB_DB && !process.env.MONGODB_DB) {
+                        process.env.MONGODB_DB = envVars.MONGODB_DB
+                    }
+
+                    const { default: handler } = await import('./api/sitemap.js')
+                    const fakeReq = { method: req.method, query: {}, headers: req.headers }
+                    const fakeRes = {
+                        _status: 200,
+                        _headers: {},
+                        status(code) { this._status = code; return this },
+                        setHeader(k, v) { this._headers[k] = v; return this },
+                        json(data) {
+                            res.writeHead(this._status, { 'Content-Type': 'application/json', ...this._headers })
+                            res.end(JSON.stringify(data))
+                        },
+                        end(body) {
+                            res.writeHead(this._status, this._headers)
+                            res.end(body)
+                        },
+                    }
+                    await handler(fakeReq, fakeRes)
+                } catch (err) {
+                    console.error('[sitemap-proxy] Error:', err)
+                    res.writeHead(500, { 'Content-Type': 'application/json' })
+                    res.end(JSON.stringify({ error: err.message }))
+                }
+            })
+        },
+    }
+}
+
 export default defineConfig({
     plugins: [
         react(),
         groqApiPlugin(),
         githubSkillsPlugin(),
-        Sitemap({
-            hostname: 'https://skillissue.bajpai.tech',
-            dynamicRoutes: ['/build', '/browse', '/skill/github', '/community', '/about', '/privacy', '/terms'],
-            generateRobotsTxt: false,
-        }),
+        sitemapPlugin(),
         VitePWA({
             registerType: 'autoUpdate',
             includeAssets: ['favicon.png', 'skill-issue-white.png'],
