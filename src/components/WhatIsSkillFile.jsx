@@ -162,7 +162,7 @@ export default function WhatIsSkillFile() {
                                 <div
                                     key={useCase.title}
                                     ref={el => { cardRefs.current[i] = el }}
-                                    style={{ opacity: 0, willChange: 'transform, opacity', transition: 'transform 0.06s linear, opacity 0.06s linear, box-shadow 500ms, border-color 500ms' }}
+                                    style={{ opacity: 'var(--card-initial-opacity, 0)', willChange: 'transform, opacity', transition: 'transform 0.06s linear, opacity 0.06s linear, box-shadow 500ms, border-color 500ms' }}
                                     className={`group relative rounded-2xl overflow-hidden border bg-gradient-to-br ${useCase.gradient} ${useCase.borderColor} ${useCase.glowColor} transition-all duration-500`}
                                 >
                                     <div className="p-7 sm:p-8">

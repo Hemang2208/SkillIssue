@@ -441,7 +441,7 @@ export default defineConfig({
             manifest: {
                 name: 'Skill Issue',
                 short_name: 'SkillIssue',
-                description: 'The marketplace for AI skill files. Discover, save, share and combine skill files for Claude, ChatGPT, Gemini, Cursor and more.',
+                description: 'The AI skills marketplace. Discover, build, share and combine skills for Claude, ChatGPT, Gemini, Cursor and more.',
                 theme_color: '#0a0e1a',
                 background_color: '#0a0e1a',
                 display: 'standalone',

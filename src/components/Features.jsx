@@ -180,7 +180,7 @@ export default function Features() {
                                             style={{
                                                 background:   feature.cardBg,
                                                 borderColor:  feature.borderColor,
-                                                opacity:      0,
+                                                opacity:      'var(--card-initial-opacity, 0)',
                                             }}
                                         >
                                             {/* Radial glow */}

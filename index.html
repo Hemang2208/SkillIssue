@@ -7,8 +7,8 @@
     <link rel="preload" as="image" href="/skill-issue-white.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description"
-        content="Skill Issue — The marketplace for AI skill files. Discover, save, share and combine .md skill files for Claude, ChatGPT, Gemini, Cursor and more." />
-    <title>Skill Issue — AI Skill Files Marketplace for Claude, ChatGPT, Gemini & Cursor</title>
+        content="Skill Issue — The AI skills marketplace. Discover, build, share and combine AI skills for Claude, ChatGPT, Gemini, Cursor and more. 50,000+ skills available." />
+    <title>Skill Issue — AI Skills Marketplace for Claude, ChatGPT, Gemini & Cursor</title>
 
     <!-- Canonical -->
     <link rel="canonical" href="https://skillissue.bajpai.tech/" />
@@ -16,8 +16,8 @@
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Skill Issue" />
-    <meta property="og:title" content="Skill Issue — AI Skill Files Marketplace" />
-    <meta property="og:description" content="Discover, save, share and combine AI skill files for Claude, ChatGPT, Gemini, Cursor and more. 8,000+ skills available." />
+    <meta property="og:title" content="Skill Issue — AI Skills Marketplace" />
+    <meta property="og:description" content="Discover, build, share and combine AI skills for Claude, ChatGPT, Gemini, Cursor and more. 50,000+ skills available." />
     <meta property="og:url" content="https://skillissue.bajpai.tech/" />
     <meta property="og:image" content="https://skillissue.bajpai.tech/og-image.png" />
     <meta property="og:image:width" content="1200" />
@@ -25,8 +25,8 @@
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Skill Issue — AI Skill Files Marketplace" />
-    <meta name="twitter:description" content="Discover, save, share and combine AI skill files for Claude, ChatGPT, Gemini, Cursor and more." />
+    <meta name="twitter:title" content="Skill Issue — AI Skills Marketplace" />
+    <meta name="twitter:description" content="Discover, build, share and combine AI skills for Claude, ChatGPT, Gemini, Cursor and more. 50,000+ skills available." />
     <meta name="twitter:image" content="https://skillissue.bajpai.tech/og-image.png" />
     <meta name="twitter:site" content="@BajpaiX" />
 
@@ -40,17 +40,78 @@
                 "name": "Skill Issue",
                 "url": "https://skillissue.bajpai.tech",
                 "logo": "https://skillissue.bajpai.tech/favicon.png",
-                "sameAs": ["https://twitter.com/BajpaiX", "https://github.com/heyabhishekbajpai"]
+                "description": "The AI skills marketplace. Discover, build, share and combine skills for every AI agent.",
+                "sameAs": [
+                    "https://x.com/BajpaiX",
+                    "https://github.com/heyabhishekbajpai",
+                    "https://www.linkedin.com/company/bajpaitech/",
+                    "https://www.instagram.com/bajpai.tech/",
+                    "https://www.youtube.com/@abhishek.bajpai"
+                ]
             },
             {
                 "@type": "WebSite",
                 "name": "Skill Issue",
                 "url": "https://skillissue.bajpai.tech",
+                "description": "The AI skills marketplace — discover, build, share and combine skills for every AI agent.",
                 "potentialAction": {
                     "@type": "SearchAction",
-                    "target": "https://skillissue.bajpai.tech/browse?q={search_term_string}",
+                    "target": {
+                        "@type": "EntryPoint",
+                        "urlTemplate": "https://skillissue.bajpai.tech/browse?q={search_term_string}"
+                    },
                     "query-input": "required name=search_term_string"
                 }
+            },
+            {
+                "@type": "SoftwareApplication",
+                "name": "Skill Issue",
+                "applicationCategory": "DeveloperApplication",
+                "operatingSystem": "Web",
+                "url": "https://skillissue.bajpai.tech",
+                "description": "AI skills marketplace — discover, build, share and combine skills for Claude, ChatGPT, Gemini, Cursor and more.",
+                "offers": {
+                    "@type": "Offer",
+                    "price": "0",
+                    "priceCurrency": "USD"
+                }
+            },
+            {
+                "@type": "FAQPage",
+                "mainEntity": [
+                    {
+                        "@type": "Question",
+                        "name": "What are AI skills?",
+                        "acceptedAnswer": {
+                            "@type": "Answer",
+                            "text": "AI skills are structured markdown (.md) instruction files that give AI agents like Claude, ChatGPT, Gemini, and Cursor specific expertise. They contain prompts, rules, examples, and best practices that make your AI agent expert-level at a particular task."
+                        }
+                    },
+                    {
+                        "@type": "Question",
+                        "name": "How do I use a skill?",
+                        "acceptedAnswer": {
+                            "@type": "Answer",
+                            "text": "Copy or download the skill file from Skill Issue, then add it to your AI agent. For Claude, paste it into your Project instructions. For Cursor, save it as a .md file in your .cursor/rules folder. For ChatGPT, paste it into Custom Instructions."
+                        }
+                    },
+                    {
+                        "@type": "Question",
+                        "name": "Is Skill Issue free?",
+                        "acceptedAnswer": {
+                            "@type": "Answer",
+                            "text": "Yes! Browsing, downloading, and using AI skills is completely free. You can also create and share your own skills at no cost using our AI-powered skill builder."
+                        }
+                    },
+                    {
+                        "@type": "Question",
+                        "name": "Which AI agents are supported?",
+                        "acceptedAnswer": {
+                            "@type": "Answer",
+                            "text": "Skills work with any AI agent that accepts text instructions, including Claude (Anthropic), ChatGPT (OpenAI), Gemini (Google), Cursor, GitHub Copilot, Windsurf, and more."
+                        }
+                    }
+                ]
             }
         ]
     }
@@ -66,6 +127,58 @@
 <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+
+    <!-- Fallback content for crawlers that don't execute JavaScript -->
+    <noscript>
+        <div style="max-width:800px;margin:0 auto;padding:40px 20px;font-family:system-ui,sans-serif;color:#e2e8f0;background:#0a0e1a;">
+            <h1>Skill Issue — AI Skills Marketplace</h1>
+            <p>Skill Issue is the open marketplace for AI skills. Discover, build, share and combine AI skills for Claude, ChatGPT, Gemini, Cursor, Copilot and more.</p>
+
+            <h2>What Are AI Skills?</h2>
+            <p>AI skills are structured markdown instruction files that give AI agents precise, actionable capabilities for specific tasks. Think of them as apps, but for AI — install a skill and your AI agent instantly becomes better at that task.</p>
+
+            <h2>How It Works</h2>
+            <ol>
+                <li><strong>Find a Skill</strong> — Browse thousands of community-created skills for Claude, ChatGPT, Gemini, Cursor and more.</li>
+                <li><strong>Copy or Download</strong> — One-click copy or download the .md file. Save to your vault or share with your team.</li>
+                <li><strong>Supercharge Your AI</strong> — Drop the skill into your AI agent and watch it transform.</li>
+            </ol>
+
+            <h2>Features</h2>
+            <ul>
+                <li><strong>Browse &amp; Discover</strong> — Explore 50,000+ AI skills across coding, writing, design, marketing, and more.</li>
+                <li><strong>AI Skill Builder</strong> — Create custom skills in minutes with our AI-powered editor.</li>
+                <li><strong>Public Marketplace</strong> — Rate, review, and download the best skills from the community.</li>
+                <li><strong>Private Vault</strong> — Securely store your personal skill collection.</li>
+                <li><strong>Skill Combining</strong> — Merge multiple skills into powerful combos.</li>
+            </ul>
+
+            <h2>Frequently Asked Questions</h2>
+            <h3>What are AI skills?</h3>
+            <p>AI skills are markdown (.md) instruction files that give AI agents like Claude, ChatGPT, Gemini, and Cursor specific expertise. They contain structured prompts, rules, and examples that make your AI agent expert-level at a particular task.</p>
+
+            <h3>How do I use a skill?</h3>
+            <p>Copy or download the skill file, then paste it into your AI agent's system prompt or project instructions. The agent immediately gains the capability described in the skill.</p>
+
+            <h3>Is Skill Issue free?</h3>
+            <p>Yes! Browsing, downloading, and using skills is completely free. You can also create and share your own skills at no cost.</p>
+
+            <h3>Which AI agents are supported?</h3>
+            <p>Skills work with any AI agent that accepts text instructions, including Claude (Anthropic), ChatGPT (OpenAI), Gemini (Google), Cursor, GitHub Copilot, and more.</p>
+
+            <nav>
+                <h2>Explore</h2>
+                <ul>
+                    <li><a href="/browse">Browse AI Skills</a></li>
+                    <li><a href="/build">Build a Skill</a></li>
+                    <li><a href="/community">Community</a></li>
+                    <li><a href="/about">About Skill Issue</a></li>
+                    <li><a href="/privacy">Privacy Policy</a></li>
+                    <li><a href="/terms">Terms of Service</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
 </body>
 
 </html>

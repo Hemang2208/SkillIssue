@@ -17,3 +17,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         </HelmetProvider>
     </React.StrictMode>,
 )
+
+// Signal to prerenderer that the page is ready to snapshot
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        document.dispatchEvent(new Event('prerender-ready'))
+    }, 2000)
+})

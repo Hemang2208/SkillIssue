@@ -1,4 +1,4 @@
-import SEO from '../components/SEO'
+import SEO, { jsonLdSchemas } from '../components/SEO'
 import Breadcrumbs from '../components/Breadcrumbs'
 
 export default function Terms() {
@@ -6,8 +6,12 @@ export default function Terms() {
         <>
             <SEO
                 title="Terms of Service"
-                description="Skill Issue terms of service. Read the terms and conditions for using the AI skill files marketplace."
+                description="Skill Issue terms of service. Read the terms and conditions for using the AI skills marketplace."
                 path="/terms"
+                jsonLd={jsonLdSchemas.breadcrumb([
+                    { name: 'Home', url: '/' },
+                    { name: 'Terms of Service' },
+                ])}
             />
             <section className="pt-28 pb-20 min-h-screen">
                 <div className="max-w-3xl mx-auto px-6 lg:px-8">

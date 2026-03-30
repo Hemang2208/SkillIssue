@@ -67,11 +67,15 @@ export default function Footer() {
                             Resources
                         </h4>
                         <ul className="space-y-3">
-                            {['Documentation', 'API Reference', 'Skill Format Guide', 'Blog', 'Changelog'].map((link) => (
-                                <li key={link}>
-                                    <a href="#" className="font-satoshi text-sm text-white/30 hover:text-accent-light transition-colors duration-300">
-                                        {link}
-                                    </a>
+                            {[
+                                { label: 'What Are AI Skills?', to: '/about' },
+                                { label: 'Skill Format Guide', to: '/about' },
+                                { label: 'Community', to: '/community' },
+                            ].map(({ label, to }) => (
+                                <li key={label}>
+                                    <Link to={to} className="font-satoshi text-sm text-white/30 hover:text-accent-light transition-colors duration-300">
+                                        {label}
+                                    </Link>
                                 </li>
                             ))}
                         </ul>
@@ -83,11 +87,21 @@ export default function Footer() {
                             Company
                         </h4>
                         <ul className="space-y-3">
-                            {['About', 'Discord Community', 'Twitter / X', 'GitHub', 'Contact'].map((link) => (
-                                <li key={link}>
-                                    <a href="#" className="font-satoshi text-sm text-white/30 hover:text-accent-light transition-colors duration-300">
-                                        {link}
-                                    </a>
+                            {[
+                                { label: 'About', href: '/about', internal: true },
+                                { label: 'Twitter / X', href: 'https://x.com/BajpaiX', internal: false },
+                                { label: 'GitHub', href: 'https://github.com/heyabhishekbajpai', internal: false },
+                            ].map(({ label, href, internal }) => (
+                                <li key={label}>
+                                    {internal ? (
+                                        <Link to={href} className="font-satoshi text-sm text-white/30 hover:text-accent-light transition-colors duration-300">
+                                            {label}
+                                        </Link>
+                                    ) : (
+                                        <a href={href} target="_blank" rel="noopener noreferrer" className="font-satoshi text-sm text-white/30 hover:text-accent-light transition-colors duration-300">
+                                            {label}
+                                        </a>
+                                    )}
                                 </li>
                             ))}
                         </ul>

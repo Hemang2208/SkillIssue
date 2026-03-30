@@ -115,7 +115,7 @@ export default function HowItWorks() {
                                     key={step.number}
                                     ref={el => { cardRefs.current[i] = el }}
                                     style={{
-                                        opacity: 0,
+                                        opacity: 'var(--card-initial-opacity, 0)',
                                         willChange: 'transform, opacity',
                                         transition: 'transform 0.06s linear, opacity 0.06s linear',
                                     }}

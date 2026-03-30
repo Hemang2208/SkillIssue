@@ -26,10 +26,10 @@ export default function SEO({
     jsonLd,
     noindex = false,
 }) {
-    const fullTitle = title ? `${title} | ${SITE_NAME}` : `${SITE_NAME} — AI Skill Files Marketplace for Claude, ChatGPT, Gemini & Cursor`
+    const fullTitle = title ? `${title} | ${SITE_NAME}` : `${SITE_NAME} — AI Skills Marketplace for Claude, ChatGPT, Gemini & Cursor`
     const canonicalUrl = `${SITE_URL}${path}`
     const ogImage = image || DEFAULT_IMAGE
-    const metaDescription = description || 'Discover, save, share and combine AI skill files for Claude, ChatGPT, Gemini, Cursor and more. 50,000+ skills available.'
+    const metaDescription = description || 'Discover, build, share and combine AI skills for Claude, ChatGPT, Gemini, Cursor and more. 50,000+ skills available.'
 
     return (
         <Helmet>
@@ -76,7 +76,7 @@ export const jsonLdSchemas = {
         name: 'Skill Issue',
         url: SITE_URL,
         logo: `${SITE_URL}/favicon.png`,
-        description: 'The marketplace for AI skill files. Discover, save, share and combine skill files for every AI agent.',
+        description: 'The AI skills marketplace. Discover, build, share and combine skills for every AI agent.',
         sameAs: [
             'https://www.linkedin.com/company/bajpaitech/',
             'https://github.com/heyabhishekbajpai',
@@ -90,7 +90,7 @@ export const jsonLdSchemas = {
         '@type': 'WebSite',
         name: 'Skill Issue',
         url: SITE_URL,
-        description: 'The marketplace for AI skill files.',
+        description: 'The AI skills marketplace — discover, build, share and combine skills for every AI agent.',
         potentialAction: {
             '@type': 'SearchAction',
             target: {
@@ -107,7 +107,7 @@ export const jsonLdSchemas = {
         applicationCategory: 'DeveloperApplication',
         operatingSystem: 'Web',
         url: SITE_URL,
-        description: 'Marketplace for AI skill files — discover, save, share and combine .md skill files for Claude, ChatGPT, Gemini, Cursor and more.',
+        description: 'AI skills marketplace — discover, build, share and combine skills for Claude, ChatGPT, Gemini, Cursor and more.',
         offers: {
             '@type': 'Offer',
             price: '0',

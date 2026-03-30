@@ -9,6 +9,7 @@ import WhatIsSkillFile from './components/WhatIsSkillFile'
 import HowItWorks from './components/HowItWorks'
 import Features from './components/Features'
 import CTA from './components/CTA'
+import FAQ from './components/FAQ'
 import Footer from './components/Footer'
 import SkillBuilder from './pages/SkillBuilder'
 import SkillUploader from './pages/SkillUploader'
@@ -26,15 +27,22 @@ import Terms from './pages/Terms'
 import BottomNav from './components/BottomNav'
 import SplashScreen from './components/SplashScreen'
 import InstallPrompt from './components/InstallPrompt'
-import SEO from './components/SEO'
+import SEO, { jsonLdSchemas } from './components/SEO'
 
 function LandingPage() {
     return (
         <>
             <SEO
                 title={null}
-                description="Skill Issue is the marketplace for AI skill files. Discover, save, share and combine .md skill files for Claude, ChatGPT, Gemini, Cursor and more. 50,000+ skills available."
+                description="Skill Issue is the AI skills marketplace. Discover, build, share and combine AI skills for Claude, ChatGPT, Gemini, Cursor and more. 50,000+ skills available."
                 path="/"
+                jsonLd={{
+                    '@graph': [
+                        jsonLdSchemas.website(),
+                        jsonLdSchemas.organization(),
+                        jsonLdSchemas.softwareApplication(),
+                    ],
+                }}
             />
             <Hero />
             <VideoAndPlatforms />
@@ -42,19 +50,23 @@ function LandingPage() {
             <WhatIsSkillFile />
             <HowItWorks />
             <Features />
+            <FAQ />
             <CTA />
             <Footer />
         </>
     )
 }
 
+// Detect if visitor is a bot/crawler — skip splash screen for them
+const isBot = typeof navigator !== 'undefined' && /bot|crawl|spider|slurp|googlebot|bingbot|yandex|baidu|duckduckbot|facebookexternalhit|twitterbot|linkedinbot|perplexitybot|chatgpt|gptbot|claude|anthropic|prerender/i.test(navigator.userAgent)
+
 export default function App() {
     const { showAuthModal, needsOnboarding } = useAuth()
-    const [splashDone, setSplashDone] = useState(false)
+    const [splashDone, setSplashDone] = useState(isBot)
 
     return (
         <div className="relative min-h-screen bg-navy text-white">
-            {!splashDone && <SplashScreen onDone={() => setSplashDone(true)} />}
+            {!splashDone && !isBot && <SplashScreen onDone={() => setSplashDone(true)} />}
             <InstallPrompt />
             {/* Grid Background */}
             <div className="grid-bg" />
@@ -62,7 +74,7 @@ export default function App() {
             {/* Content */}
             <div className="relative z-10">
                 <Navbar />
-                <div className="pb-20 md:pb-0">
+                <main className="pb-20 md:pb-0">
                     <Routes>
                         <Route path="/" element={<LandingPage />} />
                         <Route path="/build" element={<SkillBuilder />} />
@@ -77,7 +89,7 @@ export default function App() {
                         <Route path="/privacy" element={<Privacy />} />
                         <Route path="/terms" element={<Terms />} />
                     </Routes>
-                </div>
+                </main>
             </div>
 
             {/* Bottom nav — direct child of root so no ancestor overflow/transform

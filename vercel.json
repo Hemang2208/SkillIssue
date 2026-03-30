@@ -1,12 +1,28 @@
 {
+    "buildCommand": "npm run build",
+    "outputDirectory": "dist",
+    "installCommand": "npm install",
     "rewrites": [
+        {
+            "source": "/sitemap.xml",
+            "destination": "/api/sitemap"
+        },
         {
             "source": "/api/(.*)",
             "destination": "/api/$1"
         },
         {
-            "source": "/(.*)",
+            "source": "/((?!sitemap\\.xml|robots\\.txt|favicon\\.png|og-image\\.png|manifest\\.webmanifest|sw\\.js|assets/).*)",
             "destination": "/index.html"
+        }
+    ],
+    "headers": [
+        {
+            "source": "/sitemap.xml",
+            "headers": [
+                { "key": "Content-Type", "value": "application/xml" },
+                { "key": "Cache-Control", "value": "public, max-age=86400" }
+            ]
         }
     ]
 }

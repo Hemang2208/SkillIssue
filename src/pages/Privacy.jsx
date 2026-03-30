@@ -1,4 +1,4 @@
-import SEO from '../components/SEO'
+import SEO, { jsonLdSchemas } from '../components/SEO'
 import Breadcrumbs from '../components/Breadcrumbs'
 
 export default function Privacy() {
@@ -6,8 +6,12 @@ export default function Privacy() {
         <>
             <SEO
                 title="Privacy Policy"
-                description="Skill Issue privacy policy. Learn how we collect, use, and protect your data when you use our AI skill files marketplace."
+                description="Skill Issue privacy policy. Learn how we collect, use, and protect your data when you use the AI skills marketplace."
                 path="/privacy"
+                jsonLd={jsonLdSchemas.breadcrumb([
+                    { name: 'Home', url: '/' },
+                    { name: 'Privacy Policy' },
+                ])}
             />
             <section className="pt-28 pb-20 min-h-screen">
                 <div className="max-w-3xl mx-auto px-6 lg:px-8">
