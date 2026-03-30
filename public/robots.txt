@@ -5,7 +5,7 @@ User-agent: *
 Allow: /
 
 # Sitemap (dynamic — includes all skill pages)
-Sitemap: https://www.skillissue.bajpai.tech/api/sitemap
+Sitemap: https://www.skillissue.bajpai.tech/sitemap.xml
 
 # Allow AI search engine bots
 User-agent: Googlebot
